@@ -23,11 +23,11 @@ class AnamnesisController extends Controller
     {
         $validated = $request->validate([
             'patient_id' => 'required|exists:patients,id',
-            'chief_complaint' => 'required|string|max:255',
-            'history_of_present_illness' => 'nullable|string',
-            'past_medical_history' => 'nullable|string',
-            'allergies' => 'nullable|string',
-            'current_medications' => 'nullable|string',
+            'chief_complaint' => 'nullable|string',
+            'patient_routine' => 'nullable|string',
+            'family_history' => 'nullable|string',
+            'medications_in_use' => 'nullable|string',
+            'symptoms_checklist' => 'nullable|array', // Valida que recebemos o array de sintomas
         ]);
 
         $validated['professional_id'] = auth()->id();
@@ -35,6 +35,6 @@ class AnamnesisController extends Controller
         Anamnesis::create($validated);
 
         return redirect()->route('patients.show', $request->patient_id)
-            ->with('success', 'Anamnese registrada com sucesso!');
+            ->with('success', 'Anamnese Integrativa registrada com sucesso!');
     }
 }

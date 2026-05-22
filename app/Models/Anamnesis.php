@@ -1,4 +1,5 @@
 <?php
+
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -9,47 +10,20 @@ class Anamnesis extends Model
 {
     use HasFactory, SoftDeletes;
 
-    // A tabela no banco se chama 'anamneses', mas às vezes o Laravel tenta pluralizar 
-    // 'anamnesis' para 'anamnesises'. Forçar o nome da tabela evita dores de cabeça.
-    protected $table = 'anamneses';
+    protected $guarded = ['id'];
 
-    protected $fillable = [
-        'patient_id',
-        'appointment_id',
-        'professional_id',
-        'chief_complaint',
-        'history_present_illness',
-        'past_medical_history',
-        'family_history',
-        'social_history',
-        'allergies',
-        'current_medications',
-        'physical_examination',
-        'diagnostic_hypothesis',
-        'conduct_plan',
+    // Diz ao Laravel para converter automaticamente o JSON do banco para Array no PHP
+    protected $casts = [
+        'symptoms_checklist' => 'array',
     ];
 
-    /**
-     * Retorna o paciente dono deste histórico.
-     */
     public function patient()
     {
         return $this->belongsTo(Patient::class);
     }
 
-    /**
-     * Retorna a consulta em que esta anamnese foi registrada.
-     */
-    public function appointment()
-    {
-        return $this->belongsTo(Appointment::class);
-    }
-
-    /**
-     * Retorna o profissional que registrou a anamnese.
-     */
     public function professional()
     {
-        return $this->belongsTo(Professional::class);
+        return $this->belongsTo(User::class, 'professional_id');
     }
 }
