@@ -10,6 +10,7 @@ use App\Http\Controllers\EvolutionController;
 use App\Http\Controllers\PrescriptionController;
 use App\Http\Controllers\FeedbackController;
 use App\Http\Controllers\ProfileController;
+use App\Http\Controllers\DashboardController;
 
 /*
 |--------------------------------------------------------------------------
@@ -24,6 +25,11 @@ use App\Http\Controllers\ProfileController;
 Route::get('/', function () {
     return redirect()->route('login');
 });
+
+// Substitua a rota '/dashboard' antiga por esta:
+Route::get('/dashboard', [DashboardController::class, 'index'])
+    ->middleware(['auth', 'verified'])
+    ->name('dashboard');
 
 // -------------------------------------------------------------
 // ÁREA PÚBLICA DO PACIENTE (Acesso via Links Seguros)
@@ -79,6 +85,12 @@ Route::middleware('auth')->group(function () {
     Route::patch('/profile', [ProfileController::class, 'update'])->name('profile.update');
     Route::delete('/profile', [ProfileController::class, 'destroy'])->name('profile.destroy');
 });
+Route::get('/prescriptions/{prescription}/pdf', [App\Http\Controllers\PrescriptionController::class, 'generatePdf'])->name('prescriptions.pdf');
+// Coloque esta linha PRIMEIRO
+Route::patch('/appointments/{id}/status', [App\Http\Controllers\AppointmentController::class, 'updateStatus'])->name('appointments.updateStatus');
+
+// E o resource DEPOIS
+Route::resource('appointments', App\Http\Controllers\AppointmentController::class);
 // -------------------------------------------------------------
 // AUTENTICAÇÃO (Breeze)
 // -------------------------------------------------------------

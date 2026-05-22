@@ -59,4 +59,5 @@ class Evolution extends Model
     {
         return $this->belongsTo(Appointment::class);
     }
+    
 }

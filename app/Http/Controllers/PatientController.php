@@ -4,6 +4,8 @@ namespace App\Http\Controllers;
 
 use App\Models\Patient;
 use App\Models\Anamnesis;
+use App\Models\Evolution;
+use App\Models\Prescription;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 
@@ -44,14 +46,24 @@ class PatientController extends Controller
 
     public function show(Patient $patient)
     {
-        // Busca todas as anamneses do paciente, ordenadas da mais recente para a mais antiga
         $anamneses = Anamnesis::where('patient_id', $patient->id)
+                            ->orderBy('created_at', 'desc')
+                            ->get();
+
+        $evolutions = Evolution::where('patient_id', $patient->id)
+                            ->orderBy('created_at', 'desc')
+                            ->get();
+
+        // Busca as receitas do paciente
+        $prescriptions = Prescription::where('patient_id', $patient->id)
                             ->orderBy('created_at', 'desc')
                             ->get();
 
         return Inertia::render('Patients/Show', [
             'patient' => $patient,
-            'anamneses' => $anamneses // Enviamos as anamneses para o Vue
+            'anamneses' => $anamneses,
+            'evolutions' => $evolutions,
+            'prescriptions' => $prescriptions // Envia para o Vue
         ]);
     }
 

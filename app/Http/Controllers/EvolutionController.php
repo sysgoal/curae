@@ -2,63 +2,45 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Evolution;
+use App\Models\Patient;
 use Illuminate\Http\Request;
+use Inertia\Inertia;
 
 class EvolutionController extends Controller
 {
-    /**
-     * Display a listing of the resource.
-     */
-    public function index()
+    public function create(Request $request)
     {
-        //
+        $patient = Patient::findOrFail($request->query('patient_id'));
+
+        return Inertia::render('Evolutions/Create', [
+            'patient' => $patient
+        ]);
     }
 
-    /**
-     * Show the form for creating a new resource.
-     */
-    public function create()
-    {
-        //
-    }
-
-    /**
-     * Store a newly created resource in storage.
-     */
     public function store(Request $request)
     {
-        //
-    }
+        $validated = $request->validate([
+            'patient_id' => 'required|exists:patients,id',
+            'weight' => 'nullable|numeric',
+            'height' => 'nullable|numeric',
+            'bmi' => 'nullable|numeric',
+            'systolic_bp' => 'nullable|integer',
+            'diastolic_bp' => 'nullable|integer',
+            'heart_rate' => 'nullable|integer',
+            'respiratory_rate' => 'nullable|integer',
+            'temperature' => 'nullable|numeric',
+            'oxygen_saturation' => 'nullable|integer',
+            'blood_glucose' => 'nullable|integer',
+            'clinical_notes' => 'required|string',
+        ]);
 
-    /**
-     * Display the specified resource.
-     */
-    public function show(string $id)
-    {
-        //
-    }
+        // Associa ao médico logado (ou usa o ID 2 provisoriamente)
+        $validated['professional_id'] = auth()->id() ?? 2;
 
-    /**
-     * Show the form for editing the specified resource.
-     */
-    public function edit(string $id)
-    {
-        //
-    }
+        Evolution::create($validated);
 
-    /**
-     * Update the specified resource in storage.
-     */
-    public function update(Request $request, string $id)
-    {
-        //
-    }
-
-    /**
-     * Remove the specified resource from storage.
-     */
-    public function destroy(string $id)
-    {
-        //
+        return redirect()->route('patients.show', $request->patient_id)
+            ->with('success', 'Evolução e Sinais Vitais registados com sucesso!');
     }
 }
