@@ -55,22 +55,22 @@ const statusMeta = (status) => {
                 <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
                     <div class="bg-white overflow-hidden shadow-sm sm:rounded-lg p-6 border-l-4 border-indigo-500">
                         <dt class="text-xs font-bold text-gray-400 uppercase tracking-wider">Pacientes Registrados</dt>
-                        <dd class="mt-2 text-3xl font-black text-gray-900">{{ stats.total_patients }}</dd>
+                        <dd class="mt-2 text-3xl font-black text-gray-900">{{ stats?.total_patients || 0 }}</dd>
                     </div>
                     
                     <div class="bg-white overflow-hidden shadow-sm sm:rounded-lg p-6 border-l-4 border-purple-500">
                         <dt class="text-xs font-bold text-gray-400 uppercase tracking-wider">Equipe Profissional</dt>
-                        <dd class="mt-2 text-3xl font-black text-gray-900">{{ stats.total_professionals }}</dd>
+                        <dd class="mt-2 text-3xl font-black text-gray-900">{{ stats?.total_professionals || 0 }}</dd>
                     </div>
 
                     <div class="bg-white overflow-hidden shadow-sm sm:rounded-lg p-6 border-l-4 border-blue-500">
                         <dt class="text-xs font-bold text-gray-400 uppercase tracking-wider">Consultas Hoje</dt>
-                        <dd class="mt-2 text-3xl font-black text-gray-900">{{ stats.appointments_today }}</dd>
+                        <dd class="mt-2 text-3xl font-black text-gray-900">{{ stats?.appointments_today || 0 }}</dd>
                     </div>
 
                     <div class="bg-white overflow-hidden shadow-sm sm:rounded-lg p-6 border-l-4 border-emerald-500">
                         <dt class="text-xs font-bold text-gray-400 uppercase tracking-wider">Concluídos Hoje</dt>
-                        <dd class="mt-2 text-3xl font-black text-gray-900">{{ stats.completed_today }}</dd>
+                        <dd class="mt-2 text-3xl font-black text-gray-900">{{ stats?.completed_today || 0 }}</dd>
                     </div>
                 </div>
 
@@ -82,7 +82,7 @@ const statusMeta = (status) => {
                             <Link :href="route('appointments.index')" class="text-sm font-bold text-indigo-600 hover:underline">Ver Agenda Completa</Link>
                         </div>
 
-                        <div v-if="nextAppointments.length > 0" class="space-y-3">
+                        <div v-if="nextAppointments && nextAppointments.length > 0" class="space-y-3">
                             <div v-for="app in nextAppointments" :key="app.id" class="flex items-center justify-between p-4 bg-gray-50 border border-gray-100 rounded-xl hover:bg-white hover:shadow-md transition-all duration-200">
                                 <div class="flex items-center gap-4">
                                     <div class="text-lg font-mono font-bold text-indigo-700 bg-white border border-indigo-200 px-3 py-1 rounded shadow-sm">
@@ -128,13 +128,22 @@ const statusMeta = (status) => {
                                 <span class="text-sm">Cadastrar Profissional</span>
                             </Link>
 
+                            <Link :href="route('patients.index')" class="flex items-center gap-3 bg-white border border-gray-200 hover:bg-gray-50 text-gray-700 font-bold py-4 px-4 rounded-xl transition-all">
+                                <div class="bg-teal-50 p-2 rounded-lg text-teal-600">
+                                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="w-6 h-6">
+                                        <path stroke-linecap="round" stroke-linejoin="round" d="M15 19.128a9.38 9.38 0 0 0 2.625.372 9.337 9.337 0 0 0 4.121-.952 4.125 4.125 0 0 0-7.533-2.493M15 19.128v-.003c0-1.113-.285-2.16-.786-3.07M15 19.128v.106A12.318 12.318 0 0 1 8.624 21c-2.331 0-4.512-.645-6.374-1.766l-.001-.109a6.375 6.375 0 0 1 11.964-3.07M12 6.375a3.375 3.375 0 1 1-6.75 0 3.375 3.375 0 0 1 6.75 0Zm8.25 2.25a2.625 2.625 0 1 1-5.25 0 2.625 2.625 0 0 1 5.25 0Z" />
+                                    </svg>
+                                </div>
+                                <span class="text-sm">Lista de Pacientes</span>
+                            </Link>
+
                             <Link :href="route('patients.create')" class="flex items-center gap-3 bg-white border border-gray-200 hover:bg-gray-50 text-gray-700 font-bold py-4 px-4 rounded-xl transition-all">
                                 <div class="bg-gray-100 p-2 rounded-lg text-gray-500">
                                     <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="w-6 h-6">
                                         <path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
                                     </svg>
                                 </div>
-                                <span class="text-sm">Cadastrar Paciente</span>
+                                <span class="text-sm">Novo Paciente</span>
                             </Link>
 
                             <Link :href="route('appointments.index')" class="flex items-center gap-3 bg-white border border-gray-200 hover:bg-gray-50 text-gray-700 font-bold py-4 px-4 rounded-xl transition-all">

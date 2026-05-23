@@ -8,6 +8,7 @@ use App\Models\Evolution;
 use App\Models\Prescription;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
+use App\Models\PatientFile;
 
 class PatientController extends Controller
 {
@@ -44,26 +45,24 @@ class PatientController extends Controller
         return redirect()->route('patients.index')->with('success', 'Paciente cadastrado com sucesso!');
     }
 
-    public function show(Patient $patient)
+   public function show(Patient $patient)
     {
-        $anamneses = Anamnesis::where('patient_id', $patient->id)
-                            ->orderBy('created_at', 'desc')
-                            ->get();
-
-        $evolutions = Evolution::where('patient_id', $patient->id)
-                            ->orderBy('created_at', 'desc')
-                            ->get();
-
-        // Busca as receitas do paciente
-        $prescriptions = Prescription::where('patient_id', $patient->id)
-                            ->orderBy('created_at', 'desc')
-                            ->get();
+        // Usamos o caminho completo (\App\Models\...) por precaução
+        $anamneses = \App\Models\Anamnesis::where('patient_id', $patient->id)->latest()->get();
+        $evolutions = \App\Models\Evolution::where('patient_id', $patient->id)->latest()->get();
+        
+        // Mantive a versão sem 'with(medications)' baseada na sua última mensagem
+        $prescriptions = \App\Models\Prescription::where('patient_id', $patient->id)->latest()->get();
+        
+        // A linha que estava a causar o erro, agora com o caminho completo da classe
+        $files = \App\Models\PatientFile::where('patient_id', $patient->id)->latest()->get();
 
         return Inertia::render('Patients/Show', [
             'patient' => $patient,
             'anamneses' => $anamneses,
             'evolutions' => $evolutions,
-            'prescriptions' => $prescriptions // Envia para o Vue
+            'prescriptions' => $prescriptions,
+            'files' => $files,
         ]);
     }
 

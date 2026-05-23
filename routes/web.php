@@ -11,6 +11,7 @@ use App\Http\Controllers\PrescriptionController;
 use App\Http\Controllers\FeedbackController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\DashboardController;
+use App\Http\Controllers\PatientFileController;
 
 /*
 |--------------------------------------------------------------------------
@@ -91,6 +92,10 @@ Route::patch('/appointments/{id}/status', [App\Http\Controllers\AppointmentContr
 
 // E o resource DEPOIS
 Route::resource('appointments', App\Http\Controllers\AppointmentController::class);
+
+
+Route::post('/patient-files', [PatientFileController::class, 'store'])->name('patient-files.store');
+Route::delete('/patient-files/{patientFile}', [PatientFileController::class, 'destroy'])->name('patient-files.destroy');
 // -------------------------------------------------------------
 // AUTENTICAÇÃO (Breeze)
 // -------------------------------------------------------------

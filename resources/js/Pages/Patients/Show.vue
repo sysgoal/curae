@@ -2,7 +2,10 @@
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
 import Modal from '@/Components/Modal.vue';
 import SecondaryButton from '@/Components/SecondaryButton.vue';
-import { Head, Link } from '@inertiajs/vue3';
+import PrimaryButton from '@/Components/PrimaryButton.vue';
+import InputLabel from '@/Components/InputLabel.vue';
+import TextInput from '@/Components/TextInput.vue';
+import { Head, Link, useForm, router } from '@inertiajs/vue3';
 import { computed, ref } from 'vue';
 
 const props = defineProps({
@@ -10,32 +13,22 @@ const props = defineProps({
     anamneses: Array,
     evolutions: Array,
     prescriptions: Array,
+    files: Array,
 });
 
-// Aba ativa no prontuário: 'all' (Tudo), 'anamnese', 'evolution', 'prescription'
 const activeSubTab = ref('all');
-
-// Estado para o filtro de data (Formato do input type="date" é YYYY-MM-DD)
 const filterDate = ref('');
 
-// FUNÇÃO CORRIGIDA PARA COMPARAR DATAS COM PRECISÃO DE FUSO HORÁRIO
+// Compara a timestamp UTC convertendo-a para a data local do utilizador (YYYY-MM-DD)
 const matchDate = (createdAtString) => {
-    if (!filterDate.value) return true; // Se o filtro estiver vazio, mostra tudo
-    
-    // Converte a string UTC do Laravel para a data/hora local do computador
+    if (!filterDate.value) return true;
     const recordDate = new Date(createdAtString);
-    
-    // Extrai o dia, mês e ano no fuso horário local para o formato YYYY-MM-DD
     const localYear = recordDate.getFullYear();
     const localMonth = String(recordDate.getMonth() + 1).padStart(2, '0');
     const localDay = String(recordDate.getDate()).padStart(2, '0');
-    
-    const localFormattedDate = `${localYear}-${localMonth}-${localDay}`;
-    
-    return localFormattedDate === filterDate.value;
+    return `${localYear}-${localMonth}-${localDay}` === filterDate.value;
 };
 
-// Listas Filtradas Reativas (Filtram por Data em tempo real)
 const filteredAnamneses = computed(() => {
     return (props.anamneses || []).filter(item => matchDate(item.created_at));
 });
@@ -48,21 +41,23 @@ const filteredPrescriptions = computed(() => {
     return (props.prescriptions || []).filter(item => matchDate(item.created_at));
 });
 
-// Calcula o total de itens filtrados para exibir estados vazios precisos
+const filteredFiles = computed(() => {
+    return (props.files || []).filter(item => matchDate(item.created_at));
+});
+
 const totalFilteredItems = computed(() => {
     let count = 0;
     if (activeSubTab.value === 'all' || activeSubTab.value === 'anamnese') count += filteredAnamneses.value.length;
     if (activeSubTab.value === 'all' || activeSubTab.value === 'evolution') count += filteredEvolutions.value.length;
     if (activeSubTab.value === 'all' || activeSubTab.value === 'prescription') count += filteredPrescriptions.value.length;
+    if (activeSubTab.value === 'all' || activeSubTab.value === 'file') count += filteredFiles.value.length;
     return count;
 });
 
-// Limpar o filtro de data
 const clearDateFilter = () => {
     filterDate.value = '';
 };
 
-// Cálculo da idade
 const age = computed(() => {
     if (!props.patient.date_of_birth) return 'Idade não informada';
     const today = new Date();
@@ -75,28 +70,45 @@ const age = computed(() => {
     return `${currentAge} anos`;
 });
 
-// Modais
+// FORMULÁRIO E LOGICA DE UPLOAD
+const showingUploadModal = ref(false);
+const uploadForm = useForm({
+    patient_id: props.patient.id,
+    name: '',
+    file: null,
+    notes: '',
+});
+
+const handleFileUpload = (e) => {
+    uploadForm.file = e.target.files[0];
+};
+
+const submitUpload = () => {
+    uploadForm.post(route('patient-files.store'), {
+        preserveScroll: true,
+        onSuccess: () => {
+            showingUploadModal.value = false;
+            uploadForm.reset('name', 'file', 'notes');
+        },
+    });
+};
+
+const deleteFile = (id) => {
+    if (confirm('Tem certeza que deseja apagar este documento permanentemente?')) {
+        router.delete(route('patient-files.destroy', id), { preserveScroll: true });
+    }
+};
+
+// Modais de Histórico Clínico
 const showingAnamnesisModal = ref(false);
 const selectedAnamnesis = ref(null);
-const openAnamnesisModal = (anamnese) => {
-    selectedAnamnesis.value = anamnese;
-    showingAnamnesisModal.value = true;
-};
-const closeAnamnesisModal = () => {
-    showingAnamnesisModal.value = false;
-    setTimeout(() => selectedAnamnesis.value = null, 300);
-};
+const openAnamnesisModal = (anamnese) => { selectedAnamnesis.value = anamnese; showingAnamnesisModal.value = true; };
+const closeAnamnesisModal = () => { showingAnamnesisModal.value = false; setTimeout(() => selectedAnamnesis.value = null, 300); };
 
 const showingPrescriptionModal = ref(false);
 const selectedPrescription = ref(null);
-const openPrescriptionModal = (prescription) => {
-    selectedPrescription.value = prescription;
-    showingPrescriptionModal.value = true;
-};
-const closePrescriptionModal = () => {
-    showingPrescriptionModal.value = false;
-    setTimeout(() => selectedPrescription.value = null, 300);
-};
+const openPrescriptionModal = (prescription) => { selectedPrescription.value = prescription; showingPrescriptionModal.value = true; };
+const closePrescriptionModal = () => { showingPrescriptionModal.value = false; setTimeout(() => selectedPrescription.value = null, 300); };
 </script>
 
 <template>
@@ -116,13 +128,11 @@ const closePrescriptionModal = () => {
 
         <div class="py-12">
             <div class="max-w-7xl mx-auto sm:px-6 lg:px-8">
-                
                 <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
                     
                     <div class="md:col-span-1">
                         <div class="bg-white overflow-hidden shadow-sm sm:rounded-lg p-6 sticky top-6">
                             <h3 class="text-lg font-bold text-gray-900 border-b pb-2 mb-4">Dados do Paciente</h3>
-                            
                             <div class="space-y-3 text-sm">
                                 <p><span class="font-semibold text-gray-600">Idade:</span> {{ age }}</p>
                                 <p><span class="font-semibold text-gray-600">CPF:</span> {{ patient.cpf }}</p>
@@ -131,11 +141,8 @@ const closePrescriptionModal = () => {
                                 <p><span class="font-semibold text-gray-600">E-mail:</span> {{ patient.email || 'Não informado' }}</p>
                                 <p><span class="font-semibold text-gray-600">Gênero:</span> {{ patient.gender || 'Não informado' }}</p>
                             </div>
-
                             <div class="mt-6 pt-4 border-t">
-                                <Link :href="route('patients.edit', patient.id)" class="text-blue-600 hover:underline text-sm font-medium">
-                                    Editar Cadastro
-                                </Link>
+                                <Link :href="route('patients.edit', patient.id)" class="text-blue-600 hover:underline text-sm font-medium">Editar Cadastro</Link>
                             </div>
                         </div>
                     </div>
@@ -143,302 +150,195 @@ const closePrescriptionModal = () => {
                     <div class="md:col-span-2 space-y-6">
                         
                         <div class="bg-white overflow-hidden shadow-sm sm:rounded-lg p-6 flex flex-wrap gap-4">
-                            <Link :href="route('evolutions.create', { patient_id: patient.id })" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded font-medium text-sm transition-colors shadow-sm text-center">
+                            <Link :href="route('evolutions.create', { patient_id: patient.id })" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded font-medium text-sm transition-colors shadow-sm">
                                 + Nova Evolução
                             </Link>
-                            
-                            <Link :href="route('prescriptions.create', { patient_id: patient.id })" class="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded font-medium text-sm transition-colors shadow-sm text-center">
+                            <Link :href="route('prescriptions.create', { patient_id: patient.id })" class="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded font-medium text-sm transition-colors shadow-sm">
                                 + Nova Receita
                             </Link>
-                            
-                            <Link :href="route('anamneses.create', { patient_id: patient.id })" class="bg-gray-100 hover:bg-gray-200 text-gray-800 px-4 py-2 rounded font-medium text-sm transition-colors text-center border border-gray-200">
-                                Preencher Anamnese Integrativa
+                            <Link :href="route('anamneses.create', { patient_id: patient.id })" class="bg-gray-100 hover:bg-gray-200 text-gray-800 px-4 py-2 rounded font-medium text-sm transition-colors border border-gray-200">
+                                Preencher Anamnese
                             </Link>
+                            <button @click="showingUploadModal = true" class="bg-gray-800 hover:bg-gray-900 text-white px-4 py-2 rounded font-medium text-sm transition-colors shadow-sm flex items-center gap-2">
+                                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="w-4 h-4"><path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5m-13.5-9L12 3m0 0 4.5 4.5M12 3v13.5" /></svg>
+                                Anexar Arquivo
+                            </button>
                         </div>
 
                         <div class="bg-white overflow-hidden shadow-sm sm:rounded-lg p-6">
                             
                             <div class="bg-gray-50 p-4 rounded-lg border border-gray-200 mb-6 flex flex-wrap items-center justify-between gap-4">
                                 <div class="flex items-center gap-2">
-                                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="w-5 h-5 text-gray-400">
-                                        <path stroke-linecap="round" stroke-linejoin="round" d="m21 21-5.197-5.197m0 0A7.5 7.5 0 1 0 5.196 5.196a7.5 7.5 0 0 0 10.603 10.602Z" />
-                                    </svg>
+                                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="w-5 h-5 text-gray-400"><path stroke-linecap="round" stroke-linejoin="round" d="m21 21-5.197-5.197m0 0A7.5 7.5 0 1 0 5.196 5.196a7.5 7.5 0 0 0 10.603 10.602Z" /></svg>
                                     <span class="text-sm font-semibold text-gray-700">Recuperar informações por data:</span>
                                 </div>
                                 <div class="flex items-center gap-2">
-                                    <input 
-                                        type="date" 
-                                        v-model="filterDate"
-                                        class="border-gray-300 focus:border-blue-500 focus:ring-blue-500 rounded-md shadow-sm text-sm p-2"
-                                    />
-                                    <button 
-                                        v-if="filterDate" 
-                                        @click="clearDateFilter"
-                                        type="button" 
-                                        class="text-xs text-red-600 hover:underline font-medium px-2 py-1 bg-red-50 rounded border border-red-200"
-                                    >
-                                        Limpar
-                                    </button>
+                                    <input type="date" v-model="filterDate" class="border-gray-300 focus:border-blue-500 focus:ring-blue-500 rounded-md shadow-sm text-sm p-2" />
+                                    <button v-if="filterDate" @click="clearDateFilter" type="button" class="text-xs text-red-600 hover:underline font-medium px-2 py-1 bg-red-50 rounded border border-red-200">Limpar</button>
                                 </div>
                             </div>
 
-                            <div class="border-b border-gray-200 mb-6">
-                                <nav class="-mb-px flex space-x-6" aria-label="Tabs">
-                                    <button 
-                                        @click="activeSubTab = 'all'"
-                                        :class="[activeSubTab === 'all' ? 'border-blue-500 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300', 'whitespace-nowrap py-4 px-1 border-b-2 font-bold text-sm transition-all']"
-                                    >
-                                        Ver Tudo
-                                    </button>
-                                    <button 
-                                        @click="activeSubTab = 'anamnese'"
-                                        :class="[activeSubTab === 'anamnese' ? 'border-indigo-500 text-indigo-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300', 'whitespace-nowrap py-4 px-1 border-b-2 font-bold text-sm transition-all']"
-                                    >
-                                        Anamneses ({{ filteredAnamneses.length }})
-                                    </button>
-                                    <button 
-                                        @click="activeSubTab = 'evolution'"
-                                        :class="[activeSubTab === 'evolution' ? 'border-blue-500 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300', 'whitespace-nowrap py-4 px-1 border-b-2 font-bold text-sm transition-all']"
-                                    >
-                                        Evoluções ({{ filteredEvolutions.length }})
-                                    </button>
-                                    <button 
-                                        @click="activeSubTab = 'prescription'"
-                                        :class="[activeSubTab === 'prescription' ? 'border-emerald-500 text-emerald-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300', 'whitespace-nowrap py-4 px-1 border-b-2 font-bold text-sm transition-all']"
-                                    >
-                                        Receitas ({{ filteredPrescriptions.length }})
-                                    </button>
+                            <div class="border-b border-gray-200 mb-6 overflow-x-auto">
+                                <nav class="-mb-px flex space-x-6 min-w-max" aria-label="Tabs">
+                                    <button @click="activeSubTab = 'all'" :class="[activeSubTab === 'all' ? 'border-blue-500 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300', 'whitespace-nowrap py-4 px-1 border-b-2 font-bold text-sm transition-all']">Ver Tudo</button>
+                                    <button @click="activeSubTab = 'anamnese'" :class="[activeSubTab === 'anamnese' ? 'border-indigo-500 text-indigo-600' : 'border-transparent text-gray-500 hover:text-gray-700', 'whitespace-nowrap py-4 px-1 border-b-2 font-bold text-sm transition-all']">Anamneses ({{ filteredAnamneses.length }})</button>
+                                    <button @click="activeSubTab = 'evolution'" :class="[activeSubTab === 'evolution' ? 'border-blue-500 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700', 'whitespace-nowrap py-4 px-1 border-b-2 font-bold text-sm transition-all']">Evoluções ({{ filteredEvolutions.length }})</button>
+                                    <button @click="activeSubTab = 'prescription'" :class="[activeSubTab === 'prescription' ? 'border-emerald-500 text-emerald-600' : 'border-transparent text-gray-500 hover:text-gray-700', 'whitespace-nowrap py-4 px-1 border-b-2 font-bold text-sm transition-all']">Receitas ({{ filteredPrescriptions.length }})</button>
+                                    <button @click="activeSubTab = 'file'" :class="[activeSubTab === 'file' ? 'border-gray-800 text-gray-900' : 'border-transparent text-gray-500 hover:text-gray-700', 'whitespace-nowrap py-4 px-1 border-b-2 font-bold text-sm transition-all']">Arquivos/Exames ({{ filteredFiles.length }})</button>
                                 </nav>
                             </div>
 
                             <div class="space-y-6">
                                 
+                                <div v-if="activeSubTab === 'all' || activeSubTab === 'file'">
+                                    <div v-for="file in filteredFiles" :key="'file-'+file.id" class="bg-gray-50 border border-gray-200 rounded-lg p-4 shadow-sm hover:shadow-md transition-shadow duration-200 mb-4 flex items-center justify-between">
+                                        <div class="flex items-center gap-4">
+                                            <div class="bg-gray-800 text-white p-3 rounded-lg flex-shrink-0">
+                                                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="w-6 h-6"><path stroke-linecap="round" stroke-linejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 0 0-3.375-3.375h-1.5A1.125 1.125 0 0 1 13.5 7.125v-1.5a3.375 3.375 0 0 0-3.375-3.375H8.25m2.25 0H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 0 0-9-9Z" /></svg>
+                                            </div>
+                                            <div>
+                                                <h4 class="font-bold text-gray-900 text-base">{{ file.name }}</h4>
+                                                <p class="text-xs text-gray-500 mt-1 uppercase font-semibold tracking-wider">Extensão: {{ file.file_type }} • Inserido: {{ new Date(file.created_at).toLocaleDateString('pt-BR') }}</p>
+                                                <p v-if="file.notes" class="text-sm text-gray-600 mt-1">{{ file.notes }}</p>
+                                            </div>
+                                        </div>
+                                        <div class="flex items-center gap-3">
+                                            <a :href="`/storage/${file.file_path}`" target="_blank" class="text-sm font-semibold text-gray-700 bg-white border border-gray-300 hover:bg-gray-100 px-4 py-2 rounded shadow-sm transition-colors">
+                                                Ver Documento
+                                            </a>
+                                            <button @click="deleteFile(file.id)" class="text-gray-400 hover:text-red-600 font-bold transition-colors">✕</button>
+                                        </div>
+                                    </div>
+                                </div>
+
                                 <div v-if="activeSubTab === 'all' || activeSubTab === 'anamnese'">
-                                    <div v-for="anamnese in filteredAnamneses" :key="'anam-'+anamnese.id" class="bg-white border border-gray-200 rounded-lg p-5 shadow-sm hover:shadow-md transition-shadow duration-200 mb-4">
+                                    <div v-for="anamnese in filteredAnamneses" :key="'anam-'+anamnese.id" class="bg-white border border-gray-200 rounded-lg p-5 shadow-sm mb-4">
                                         <div class="flex justify-between items-center">
                                             <div class="flex flex-col flex-1 pr-4">
-                                                <h4 class="font-bold text-indigo-700 flex items-center gap-2">
-                                                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-5 h-5">
-                                                      <path stroke-linecap="round" stroke-linejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 0 0-3.375-3.375h-1.5A1.125 1.125 0 0 1 13.5 7.125v-1.5a3.375 3.375 0 0 0-3.375-3.375H8.25m3.75 9v6m3-3H9m1.5-12H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 0 0-9-9Z" />
-                                                    </svg>
-                                                    Anamnese Integrativa
-                                                </h4>
-                                                <span class="text-sm text-gray-600 mt-1 line-clamp-1">
-                                                    <span class="font-medium">Queixa:</span> {{ anamnese.chief_complaint || 'Não informada' }}
-                                                </span>
+                                                <h4 class="font-bold text-indigo-700 flex items-center gap-2">Anamnese Integrativa</h4>
+                                                <span class="text-sm text-gray-600 mt-1 line-clamp-1"><span class="font-medium">Queixa:</span> {{ anamnese.chief_complaint || 'Não informada' }}</span>
                                             </div>
                                             <div class="flex flex-col items-end gap-2">
-                                                <span class="text-xs font-semibold text-gray-500 bg-gray-100 px-2.5 py-1 rounded-full border border-gray-200">
-                                                    {{ new Date(anamnese.created_at).toLocaleDateString('pt-BR') }}
-                                                </span>
-                                                <button @click="openAnamnesisModal(anamnese)" class="flex items-center gap-1.5 px-3 py-1 text-xs font-semibold text-indigo-700 bg-indigo-50 hover:bg-indigo-600 hover:text-white rounded-md transition-all border border-indigo-200">
-                                                    Visualizar
-                                                </button>
+                                                <span class="text-xs font-semibold text-gray-500 bg-gray-100 px-2.5 py-1 rounded-full border border-gray-200">{{ new Date(anamnese.created_at).toLocaleDateString('pt-BR') }}</span>
+                                                <button @click="openAnamnesisModal(anamnese)" class="text-xs font-semibold text-indigo-700 bg-indigo-50 border border-indigo-200 px-3 py-1 rounded-md hover:bg-indigo-600 hover:text-white transition-all">Visualizar</button>
                                             </div>
                                         </div>
                                     </div>
                                 </div>
 
                                 <div v-if="activeSubTab === 'all' || activeSubTab === 'prescription'">
-                                    <div v-for="prescription in filteredPrescriptions" :key="'presc-'+prescription.id" class="bg-emerald-50 border border-emerald-200 rounded-lg p-5 shadow-sm hover:shadow-md transition-shadow duration-200 mb-4">
+                                    <div v-for="prescription in filteredPrescriptions" :key="'presc-'+prescription.id" class="bg-emerald-50 border border-emerald-200 rounded-lg p-5 shadow-sm mb-4">
                                         <div class="flex justify-between items-center">
                                             <div class="flex flex-col flex-1 pr-4">
-                                                <h4 class="font-bold text-emerald-800 flex items-center gap-2">
-                                                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-5 h-5">
-                                                        <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-                                                    </svg>
-                                                    Prescrição Médica
-                                                </h4>
-                                                <span class="text-sm text-emerald-700 mt-1 line-clamp-1">
-                                                    <span class="font-medium">Validação:</span> {{ prescription.verification_code }}
-                                                    • {{ prescription.medications ? prescription.medications.length : 0 }} medicamento(s)
-                                                </span>
+                                                <h4 class="font-bold text-emerald-800 fill-none flex items-center gap-2">Prescrição Médica</h4>
+                                                <span class="text-sm text-emerald-700 mt-1 line-clamp-1"><span class="font-medium">Validação:</span> {{ prescription.verification_code }}</span>
                                             </div>
                                             <div class="flex flex-col items-end gap-2">
-                                                <span class="text-xs font-semibold text-emerald-700 bg-emerald-100 px-2.5 py-1 rounded-full border border-emerald-200">
-                                                    {{ new Date(prescription.created_at).toLocaleDateString('pt-BR') }}
-                                                </span>
-                                                <button @click="openPrescriptionModal(prescription)" class="flex items-center gap-1.5 px-3 py-1 text-xs font-semibold text-emerald-800 bg-white hover:bg-emerald-600 hover:text-white rounded-md transition-all border border-emerald-300 shadow-sm">
-                                                    Ver Receita
-                                                </button>
+                                                <span class="text-xs font-semibold text-emerald-700 bg-emerald-100 px-2.5 py-1 rounded-full border border-emerald-200">{{ new Date(prescription.created_at).toLocaleDateString('pt-BR') }}</span>
+                                                <button @click="openPrescriptionModal(prescription)" class="text-xs font-semibold text-emerald-800 bg-white border border-emerald-300 px-3 py-1 rounded-md hover:bg-emerald-600 hover:text-white transition-all">Ver Receita</button>
                                             </div>
                                         </div>
                                     </div>
                                 </div>
 
                                 <div v-if="activeSubTab === 'all' || activeSubTab === 'evolution'">
-                                    <div v-for="evolution in filteredEvolutions" :key="'ev-'+evolution.id" class="bg-white border border-gray-200 rounded-lg p-5 shadow-sm hover:shadow-md transition-shadow duration-200 mb-4">
+                                    <div v-for="evolution in filteredEvolutions" :key="'ev-'+evolution.id" class="bg-white border border-gray-200 rounded-lg p-5 shadow-sm mb-4">
                                         <div class="flex justify-between items-center mb-3">
-                                            <h4 class="font-bold text-blue-700 flex items-center gap-2">
-                                                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-5 h-5">
-                                                    <path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
-                                                </svg>
-                                                Evolução Clínica
-                                            </h4>
-                                            <span class="text-xs font-semibold text-gray-500 bg-gray-100 px-2.5 py-1 rounded-full border border-gray-200">
-                                                {{ new Date(evolution.created_at).toLocaleDateString('pt-BR') }} às {{ new Date(evolution.created_at).toLocaleTimeString('pt-BR', {hour: '2-digit', minute:'2-digit'}) }}
-                                            </span>
+                                            <h4 class="font-bold text-blue-700 flex items-center gap-2">Evolução Clínica</h4>
+                                            <span class="text-xs font-semibold text-gray-500 bg-gray-100 px-2.5 py-1 rounded-full border border-gray-200">{{ new Date(evolution.created_at).toLocaleDateString('pt-BR') }} às {{ new Date(evolution.created_at).toLocaleTimeString('pt-BR', {hour: '2-digit', minute:'2-digit'}) }}</span>
                                         </div>
-                                        
-                                        <div class="flex flex-wrap gap-2 mb-3" v-if="evolution.weight || evolution.systolic_bp || evolution.temperature || evolution.blood_glucose || evolution.oxygen_saturation || evolution.heart_rate">
-                                            <span v-if="evolution.weight" class="text-xs font-medium bg-blue-50 text-blue-700 border border-blue-200 px-2 py-0.5 rounded">Peso: {{ evolution.weight }}kg</span>
-                                            <span v-if="evolution.height" class="text-xs font-medium bg-blue-50 text-blue-700 border border-blue-200 px-2 py-0.5 rounded">Alt: {{ evolution.height }}m</span>
-                                            <span v-if="evolution.bmi" class="text-xs font-medium bg-indigo-50 text-indigo-700 border border-indigo-200 px-2 py-0.5 rounded">IMC: {{ evolution.bmi }}</span>
-                                            <span v-if="evolution.systolic_bp && evolution.diastolic_bp" class="text-xs font-medium bg-red-50 text-red-700 border border-red-200 px-2 py-0.5 rounded">PA: {{ evolution.systolic_bp }}/{{ evolution.diastolic_bp }}</span>
-                                            <span v-if="evolution.heart_rate" class="text-xs font-medium bg-rose-50 text-rose-700 border border-rose-200 px-2 py-0.5 rounded">FC: {{ evolution.heart_rate }} bpm</span>
-                                            <span v-if="evolution.temperature" class="text-xs font-medium bg-orange-50 text-orange-700 border border-orange-200 px-2 py-0.5 rounded">Temp: {{ evolution.temperature }}°C</span>
-                                            <span v-if="evolution.oxygen_saturation" class="text-xs font-medium bg-sky-50 text-sky-700 border border-sky-200 px-2 py-0.5 rounded">SpO2: {{ evolution.oxygen_saturation }}%</span>
-                                            <span v-if="evolution.blood_glucose" class="text-xs font-medium bg-purple-50 text-purple-700 border border-purple-200 px-2 py-0.5 rounded">Glicemia: {{ evolution.blood_glucose }} mg/dL</span>
-                                        </div>
-
-                                        <div class="p-3 bg-gray-50 rounded border border-gray-100 text-sm text-gray-700 whitespace-pre-wrap leading-relaxed">
-                                            {{ evolution.clinical_notes }}
-                                        </div>
+                                        <div class="p-3 bg-gray-50 rounded border border-gray-100 text-sm text-gray-700 whitespace-pre-wrap leading-relaxed">{{ evolution.clinical_notes }}</div>
                                     </div>
                                 </div>
 
-                                <div v-if="totalFilteredItems === 0" class="py-12 text-center bg-gray-50 border border-dashed border-gray-300 rounded-lg">
-                                    <svg class="mx-auto h-12 w-12 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                                    </svg>
-                                    <h3 class="mt-2 text-sm font-medium text-gray-900">Nenhum registo encontrado</h3>
-                                    <p class="mt-1 text-sm text-gray-500">
-                                        Não existem informações nesta categoria para a data selecionada.
-                                    </p>
+                                <div v-if="totalFilteredItems === 0" class="py-16 text-center bg-gray-50 border border-dashed border-gray-300 rounded-xl">
+                                    <svg class="mx-auto h-12 w-12 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
+                                    <h3 class="mt-2 text-sm font-medium text-gray-900">Nenhum registo localizado</h3>
+                                    <p class="mt-1 text-xs text-gray-400">Não existem lançamentos nesta subcategoria para a data selecionada.</p>
                                 </div>
 
                             </div>
                         </div>
-
                     </div>
                 </div>
-
             </div>
         </div>
+
+        <Modal :show="showingUploadModal" @close="showingUploadModal = false" maxWidth="md">
+            <div class="p-6">
+                <h3 class="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2">Anexar Documento / Exame</h3>
+                <form @submit.prevent="submitUpload" class="space-y-4 text-sm">
+                    <div>
+                        <InputLabel value="Identificação do Documento *" />
+                        <TextInput type="text" class="mt-1 block w-full" v-model="uploadForm.name" placeholder="Ex: Ressonância Magnética Lombar" required />
+                    </div>
+                    <div>
+                        <InputLabel value="Ficheiro (PDF ou Imagens) *" />
+                        <input type="file" @change="handleFileUpload" class="mt-2 block w-full text-xs text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:bg-gray-100 file:text-gray-700 file:font-bold hover:file:bg-gray-200" required accept=".pdf,image/*">
+                        <progress v-if="uploadForm.progress" :value="uploadForm.progress.percentage" max="100" class="w-full mt-2 h-1.5 rounded bg-gray-200"></progress>
+                    </div>
+                    <div>
+                        <InputLabel value="Anotações / Notas de Triagem" />
+                        <textarea v-model="uploadForm.notes" rows="2" class="mt-1 block w-full border-gray-300 focus:border-indigo-500 focus:ring-indigo-500 rounded-md shadow-sm" placeholder="Ex: Apresenta alteração L4-L5..."></textarea>
+                    </div>
+                    <div class="mt-6 flex justify-end gap-3 border-t pt-4">
+                        <SecondaryButton @click="showingUploadModal = false">Cancelar</SecondaryButton>
+                        <PrimaryButton :class="{ 'opacity-25': uploadForm.processing }" :disabled="uploadForm.processing" class="bg-gray-900 hover:bg-black">
+                            Enviar Arquivo
+                        </PrimaryButton>
+                    </div>
+                </form>
+            </div>
+        </Modal>
 
         <Modal :show="showingAnamnesisModal" @close="closeAnamnesisModal" maxWidth="3xl">
             <div class="p-6" v-if="selectedAnamnesis">
                 <h2 class="text-lg font-bold text-gray-900 border-b pb-4 mb-4 flex items-center justify-between">
-                    <span class="flex items-center gap-2">
-                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="w-6 h-6 text-indigo-600">
-                            <path stroke-linecap="round" stroke-linejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 0 0-3.375-3.375h-1.5A1.125 1.125 0 0 1 13.5 7.125v-1.5a3.375 3.375 0 0 0-3.375-3.375H8.25m3.75 9v6m3-3H9m1.5-12H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 0 0-9-9Z" />
-                        </svg>
-                        Anamnese Completa do Paciente
-                    </span>
-                    <span class="text-xs font-semibold text-gray-500 bg-gray-100 px-3 py-1 rounded-full border">
-                        {{ new Date(selectedAnamnesis.created_at).toLocaleDateString('pt-BR') }}
-                    </span>
+                    <span>Anamnese Completa</span>
+                    <span class="text-xs bg-gray-100 px-3 py-1 rounded-full border">{{ new Date(selectedAnamnesis.created_at).toLocaleDateString('pt-BR') }}</span>
                 </h2>
-
-                <div class="space-y-5 overflow-y-auto max-h-[70vh] pr-2 text-sm text-gray-800">
+                <div class="space-y-4 overflow-y-auto max-h-[60vh] text-sm text-gray-800 pr-1">
                     <div>
-                        <span class="font-bold block text-gray-900 bg-gray-100 p-2 rounded-t border border-b-0 border-gray-200">Queixa Principal / Motivo da Consulta</span>
-                        <div class="p-3 border rounded-b border-gray-200 bg-white whitespace-pre-wrap leading-relaxed">
-                            {{ selectedAnamnesis.chief_complaint || 'Nenhum registro inserido.' }}
-                        </div>
+                        <span class="font-bold block bg-gray-100 p-2 border border-b-0 rounded-t">Queixa Principal</span>
+                        <div class="p-3 border rounded-b bg-white whitespace-pre-wrap leading-relaxed">{{ selectedAnamnesis.chief_complaint }}</div>
                     </div>
-
                     <div v-if="selectedAnamnesis.patient_routine">
-                        <span class="font-bold block text-gray-900 bg-gray-100 p-2 rounded-t border border-b-0 border-gray-200">Rotina (Sono, Estresse, Alimentação)</span>
-                        <div class="p-3 border rounded-b border-gray-200 bg-white whitespace-pre-wrap leading-relaxed">
-                            {{ selectedAnamnesis.patient_routine }}
-                        </div>
+                        <span class="font-bold block bg-gray-100 p-2 border border-b-0 rounded-t">Rotina Estilo de Vida</span>
+                        <div class="p-3 border rounded-b bg-white whitespace-pre-wrap leading-relaxed">{{ selectedAnamnesis.patient_routine }}</div>
                     </div>
-
-                    <div v-if="selectedAnamnesis.family_history">
-                        <span class="font-bold block text-gray-900 bg-gray-100 p-2 rounded-t border border-b-0 border-gray-200">Histórico Familiar</span>
-                        <div class="p-3 border rounded-b border-gray-200 bg-white whitespace-pre-wrap leading-relaxed">
-                            {{ selectedAnamnesis.family_history }}
-                        </div>
-                    </div>
-
-                    <div v-if="selectedAnamnesis.medications_in_use">
-                        <span class="font-bold block text-gray-900 bg-gray-100 p-2 rounded-t border border-b-0 border-gray-200">Medicamentos e Suplementos em Uso</span>
-                        <div class="p-3 border rounded-b border-gray-200 bg-white whitespace-pre-wrap leading-relaxed">
-                            {{ selectedAnamnesis.medications_in_use }}
-                        </div>
-                    </div>
-
                     <div>
-                        <span class="font-bold block text-gray-900 bg-gray-100 p-2 rounded-t border border-b-0 border-gray-200">
-                            Sinais Clínicos e Sintomas Detectados ({{ selectedAnamnesis.symptoms_checklist ? selectedAnamnesis.symptoms_checklist.length : 0 }})
-                        </span>
-                        <div class="p-4 border rounded-b border-gray-200 bg-white">
-                            <div v-if="selectedAnamnesis.symptoms_checklist && selectedAnamnesis.symptoms_checklist.length > 0" class="flex flex-wrap gap-2">
-                                <span 
-                                    v-for="(symptom, idx) in selectedAnamnesis.symptoms_checklist" :key="idx"
-                                    class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold bg-red-50 text-red-700 border border-red-200 rounded-md shadow-sm"
-                                >
-                                    <span class="w-1.5 h-1.5 rounded-full bg-red-500"></span>
-                                    {{ symptom }}
-                                </span>
-                            </div>
-                            <div v-else class="text-gray-500 text-center py-4 italic">
-                                Nenhum sinal ou sintoma foi assinalado nesta consulta.
-                            </div>
+                        <span class="font-bold block bg-gray-100 p-2 border border-b-0 rounded-t">Sintomas Assinalados</span>
+                        <div class="p-3 border rounded-b bg-white flex flex-wrap gap-1.5">
+                            <span v-for="(symp, idx) in selectedAnamnesis.symptoms_checklist" :key="idx" class="px-2 py-1 text-xs font-semibold bg-red-50 text-red-700 border border-red-200 rounded">{{ symp }}</span>
                         </div>
                     </div>
                 </div>
-
-                <div class="mt-6 flex justify-end border-t pt-4">
-                    <SecondaryButton @click="closeAnamnesisModal">
-                        Fechar Relatório
-                    </SecondaryButton>
-                </div>
+                <div class="mt-6 flex justify-end border-t pt-4"><SecondaryButton @click="closeAnamnesisModal">Fechar</SecondaryButton></div>
             </div>
         </Modal>
 
         <Modal :show="showingPrescriptionModal" @close="closePrescriptionModal" maxWidth="2xl">
             <div class="p-6" v-if="selectedPrescription">
-                <div class="border-b-2 border-emerald-500 pb-4 mb-6">
-                    <div class="flex justify-between items-start">
-                        <div>
-                            <h2 class="text-2xl font-bold text-gray-900 tracking-tight">Prescrição Médica</h2>
-                            <p class="text-sm text-gray-500 mt-1">Paciente: <span class="font-semibold text-gray-700">{{ patient.name }}</span></p>
-                            <p class="text-sm text-gray-500">Data: <span class="font-semibold text-gray-700">{{ new Date(selectedPrescription.created_at).toLocaleDateString('pt-BR') }}</span></p>
-                        </div>
-                        <div class="text-right">
-                            <span class="text-xs uppercase font-bold text-emerald-600 tracking-wider">Código de Validação</span>
-                            <p class="text-lg font-mono font-bold text-gray-800 bg-emerald-50 border border-emerald-200 px-3 py-1 rounded mt-1">{{ selectedPrescription.verification_code || '---' }}</p>
-                        </div>
+                <div class="border-b-2 border-emerald-500 pb-4 mb-4 flex justify-between items-start">
+                    <div>
+                        <h2 class="text-xl font-bold text-gray-900">Prescrição Médica</h2>
+                        <p class="text-xs text-gray-500 mt-1">Paciente: <span class="font-bold text-gray-700">{{ patient.name }}</span></p>
+                    </div>
+                    <div class="text-right">
+                        <span class="text-[10px] uppercase font-bold text-emerald-600 block">Código Verificador</span>
+                        <span class="text-sm font-mono font-bold bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded mt-1 inline-block">{{ selectedPrescription.verification_code }}</span>
                     </div>
                 </div>
-
-                <div class="space-y-4 mb-8">
-                    <h3 class="text-sm font-bold text-gray-400 uppercase tracking-wider mb-2">Uso Prescrito</h3>
-                    <div v-for="(med, idx) in selectedPrescription.medications" :key="idx" class="pl-4 border-l-4 border-emerald-400 py-1">
-                        <div class="flex justify-between items-baseline">
-                            <span class="font-bold text-lg text-gray-900">{{ med.name }}</span>
-                            <span class="font-semibold text-gray-600 bg-gray-100 px-2 py-0.5 rounded text-sm">{{ med.dosage }}</span>
-                        </div>
-                        <p class="text-gray-700 mt-1 flex items-start gap-2">
-                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="w-4 h-4 mt-0.5 text-emerald-500">
-                                <path stroke-linecap="round" stroke-linejoin="round" d="m8.25 4.5 7.5 7.5-7.5 7.5" />
-                            </svg>
-                            {{ med.instructions }}
-                        </p>
+                <div class="space-y-4 mb-6">
+                    <div v-for="(med, idx) in selectedPrescription.medications" :key="idx" class="pl-3 border-l-4 border-emerald-400 py-0.5">
+                        <div class="font-bold text-gray-900 text-base">{{ med.name }} <span class="text-xs font-normal text-gray-500">({{ med.dosage }})</span></div>
+                        <p class="text-sm text-gray-700 mt-0.5">Uso: {{ med.instructions }}</p>
                     </div>
                 </div>
-
-                <div v-if="selectedPrescription.notes" class="bg-yellow-50 border border-yellow-200 rounded p-4 mb-6">
-                    <h3 class="text-xs font-bold text-yellow-800 uppercase tracking-wider mb-1">Orientações Adicionais</h3>
-                    <p class="text-sm text-yellow-900 whitespace-pre-wrap">{{ selectedPrescription.notes }}</p>
-                </div>
-
-                <div class="mt-6 flex justify-end gap-3 border-t border-gray-100 pt-4">
-                    <SecondaryButton @click="closePrescriptionModal">
-                        Fechar Visualização
-                    </SecondaryButton>
-                    <a 
-    :href="route('prescriptions.pdf', selectedPrescription.id)" 
-    target="_blank" 
-    class="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded font-medium text-sm transition-colors shadow-sm flex items-center gap-2"
->
-    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="w-4 h-4">
-        <path stroke-linecap="round" stroke-linejoin="round" d="M6.72 13.829c-.24.03-.48.062-.72.096m.72-.096a42.415 42.415 0 0 1 10.56 0m-10.56 0L6.34 18m10.94-4.171c.24.03.48.062.72.096m-.72-.096L17.66 18m0 0 .229 2.523a1.125 1.125 0 0 1-1.12 1.227H7.231c-.662 0-1.18-.568-1.12-1.227L6.34 18m11.318 0h1.091A2.25 2.25 0 0 0 21 15.75V9.456c0-1.081-.768-2.015-1.837-2.175a48.055 48.055 0 0 0-1.913-.247M6.34 18H5.25A2.25 2.25 0 0 1 3 15.75V9.456c0-1.081.768-2.015 1.837-2.175a48.041 48.041 0 0 1 1.913-.247m10.5 0a48.536 48.536 0 0 0-10.5 0m10.5 0V3.375c0-.621-.504-1.125-1.125-1.125h-8.25c-.621 0-1.125.504-1.125 1.125v3.659M18 10.5h.008v.008H18V10.5Zm-3 0h.008v.008H15V10.5Z" />
-    </svg>
-    Imprimir Receita
-</a>
+                <div v-if="selectedPrescription.notes" class="bg-amber-50 border border-amber-200 rounded p-3 text-sm text-amber-900 whitespace-pre-wrap mb-4">{{ selectedPrescription.notes }}</div>
+                <div class="mt-6 flex justify-end gap-2 border-t pt-4">
+                    <SecondaryButton @click="closePrescriptionModal">Fechar</SecondaryButton>
+                    <a :href="route('prescriptions.pdf', selectedPrescription.id)" target="_blank" class="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded font-medium text-sm transition-colors flex items-center gap-1.5 shadow-sm">Imprimir Receita</a>
                 </div>
             </div>
         </Modal>
