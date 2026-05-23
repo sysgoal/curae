@@ -12,6 +12,8 @@ use App\Http\Controllers\FeedbackController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\PatientFileController;
+use App\Http\Controllers\AIController;
+use App\Http\Controllers\AiAssistantController;
 
 /*
 |--------------------------------------------------------------------------
@@ -96,6 +98,13 @@ Route::resource('appointments', App\Http\Controllers\AppointmentController::clas
 
 Route::post('/patient-files', [PatientFileController::class, 'store'])->name('patient-files.store');
 Route::delete('/patient-files/{patientFile}', [PatientFileController::class, 'destroy'])->name('patient-files.destroy');
+
+
+Route::post('/ask-ai', [AIController::class, 'ask']);
+
+Route::post('/ai/analyze', [AiAssistantController::class, 'analyzeText'])->name('ai.analyze');
+Route::post('/ai/protocol', [AiAssistantController::class, 'generateProtocol'])->name('ai.protocol');
+Route::get('/ai/protocol/download', [AiAssistantController::class, 'downloadProtocolPdf'])->name('ai.protocol.download');
 // -------------------------------------------------------------
 // AUTENTICAÇÃO (Breeze)
 // -------------------------------------------------------------
