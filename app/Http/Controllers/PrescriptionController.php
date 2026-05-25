@@ -8,6 +8,7 @@ use App\Models\Professional;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
 use Inertia\Inertia;
+use Barryvdh\DomPDF\Facade\Pdf; 
 
 class PrescriptionController extends Controller
 {
@@ -44,4 +45,18 @@ class PrescriptionController extends Controller
         return redirect()->route('patients.show', $request->patient_id)
             ->with('success', 'Receita médica gerada e validada com sucesso!');
     }
+
+     public function generatePdf(Prescription $prescription)
+
+    {
+        // Carrega os dados do paciente para podermos usar no PDF
+        $prescription->load('patient');
+
+        // Renderiza a vista Blade que vamos criar no passo seguinte
+        $pdf = Pdf::loadView('pdf.prescription', compact('prescription'));
+
+        // Configura para abrir no navegador em vez de descarregar logo
+        return $pdf->stream('receita_' . Str::slug($prescription->patient->name) . '.pdf');
+    }
+
 }
