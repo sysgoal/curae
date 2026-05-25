@@ -14,10 +14,12 @@ const getAge = (dob) => {
     return age;
 };
 
-const defaultType = getAge(props.patient.date_of_birth) < 14 ? 'child' : 'adult';
+// 1. Definição do Tipo Bloqueado
+const patientAge = getAge(props.patient.date_of_birth);
+const lockedType = patientAge <= 6 ? 'child' : 'adult';
 
 const form = useForm({
-    type: defaultType,
+    type: lockedType, // Sem possibilidade de alternar
     chief_complaint: '', family_history: '', patient_routine: '', symptoms_checklist: [],
     child_data: { weight: '', parents_names: '', previous_diagnosis: '', diet_description: '', water_intake: '', supplements: '', allergies: '', pain_complaint: '' },
     adult_data: { diet_routine: '', sleep_routine: '', medications: '', sun_exposure: '', past_trauma: '', birth_type: '', gastric_issues: '' }
@@ -62,28 +64,27 @@ const submit = () => {
                 </div>
                 <h1 class="text-2xl md:text-3xl font-extrabold text-gray-900">Ficha de Triagem Integrativa</h1>
                 <p class="mt-2 text-gray-500 font-medium">Paciente: <span class="text-indigo-600 font-bold">{{ patient.name }}</span></p>
+                <div class="mt-3">
+                    <span v-if="form.type === 'child'" class="text-xs bg-pink-100 text-pink-700 px-3 py-1 rounded-full font-bold uppercase tracking-wider border border-pink-200">Ficha Pediátrica</span>
+                    <span v-else class="text-xs bg-indigo-100 text-indigo-700 px-3 py-1 rounded-full font-bold uppercase tracking-wider border border-indigo-200">Ficha Adulto</span>
+                </div>
             </div>
 
             <div class="flex justify-center gap-2 mb-8">
                 <div v-for="n in (form.type === 'adult' ? totalAdultSteps + 1 : totalChildSteps + 1)" :key="n" 
                      class="h-2 rounded-full transition-all duration-300"
-                     :class="currentStep >= (n-1) ? 'bg-indigo-600 w-8' : 'bg-gray-200 w-4'">
+                     :class="currentStep >= (n-1) ? (form.type === 'child' ? 'bg-pink-500 w-8' : 'bg-indigo-600 w-8') : 'bg-gray-200 w-4'">
                 </div>
             </div>
 
             <form @submit.prevent="submit" class="bg-white p-6 md:p-10 rounded-3xl shadow-xl shadow-gray-200/50 border border-gray-100">
                 
-                <div v-if="currentStep === 0" class="flex justify-center gap-3 mb-8 bg-gray-50 p-1.5 rounded-xl">
-                    <button type="button" @click="form.type = 'adult'" :class="form.type === 'adult' ? 'bg-white shadow-md text-indigo-700' : 'text-gray-500 hover:bg-gray-100'" class="w-1/2 py-2.5 rounded-lg font-bold text-sm transition-all">Adulto</button>
-                    <button type="button" @click="form.type = 'child'" :class="form.type === 'child' ? 'bg-white shadow-md text-pink-700' : 'text-gray-500 hover:bg-gray-100'" class="w-1/2 py-2.5 rounded-lg font-bold text-sm transition-all">Infantil</button>
-                </div>
-
                 <div v-if="form.type === 'adult'">
                     <div v-if="currentStep === 0" class="space-y-5 animate-fade-in">
                         <h2 class="text-xl font-bold text-gray-800 border-b pb-3 mb-5">Dados Iniciais</h2>
                         <div><label class="block text-sm font-bold text-gray-700 mb-1">Qual o motivo da consulta?</label><textarea v-model="form.chief_complaint" rows="2" class="w-full bg-gray-50 border-gray-200 rounded-xl focus:border-indigo-500 focus:ring-indigo-500"></textarea></div>
                         <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <div><label class="block text-sm font-bold text-gray-700 mb-1">Rotina de Trabalho</label><input type="text" v-model="form.patient_routine" class="w-full bg-gray-50 border-gray-200 rounded-xl focus:border-indigo-500 focus:ring-indigo-500"></div>
+                            <div><label class="block text-sm font-bold text-gray-700 mb-1">Rotina de Trabalho / Exercício</label><input type="text" v-model="form.patient_routine" class="w-full bg-gray-50 border-gray-200 rounded-xl focus:border-indigo-500 focus:ring-indigo-500"></div>
                             <div><label class="block text-sm font-bold text-gray-700 mb-1">Rotina Alimentar</label><input type="text" v-model="form.adult_data.diet_routine" class="w-full bg-gray-50 border-gray-200 rounded-xl focus:border-indigo-500 focus:ring-indigo-500"></div>
                             <div><label class="block text-sm font-bold text-gray-700 mb-1">Dorme a que horas? (Celular no quarto?)</label><input type="text" v-model="form.adult_data.sleep_routine" class="w-full bg-gray-50 border-gray-200 rounded-xl focus:border-indigo-500 focus:ring-indigo-500"></div>
                             <div><label class="block text-sm font-bold text-gray-700 mb-1">Remédios que toma diariamente</label><input type="text" v-model="form.adult_data.medications" class="w-full bg-gray-50 border-gray-200 rounded-xl focus:border-indigo-500 focus:ring-indigo-500"></div>
@@ -111,21 +112,21 @@ const submit = () => {
                     <div v-if="currentStep === 0" class="space-y-5 animate-fade-in">
                         <h2 class="text-xl font-bold text-gray-800 border-b pb-3 mb-5">Dados Iniciais da Criança</h2>
                         <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <div><label class="block text-sm font-bold text-gray-700 mb-1">Nome dos Pais</label><input type="text" v-model="form.child_data.parents_names" class="w-full bg-gray-50 border-gray-200 rounded-xl"></div>
-                            <div><label class="block text-sm font-bold text-gray-700 mb-1">Peso Atual (kg)</label><input type="text" v-model="form.child_data.weight" class="w-full bg-gray-50 border-gray-200 rounded-xl"></div>
+                            <div><label class="block text-sm font-bold text-gray-700 mb-1">Nome dos Pais</label><input type="text" v-model="form.child_data.parents_names" class="w-full bg-gray-50 border-gray-200 rounded-xl focus:ring-pink-500 focus:border-pink-500"></div>
+                            <div><label class="block text-sm font-bold text-gray-700 mb-1">Peso Atual (kg)</label><input type="text" v-model="form.child_data.weight" class="w-full bg-gray-50 border-gray-200 rounded-xl focus:ring-pink-500 focus:border-pink-500"></div>
                         </div>
-                        <div><label class="block text-sm font-bold text-gray-700 mb-1">Motivo da Consulta</label><textarea v-model="form.chief_complaint" rows="2" class="w-full bg-gray-50 border-gray-200 rounded-xl"></textarea></div>
-                        <div><label class="block text-sm font-bold text-gray-700 mb-1">Diagnósticos Prévios?</label><textarea v-model="form.child_data.previous_diagnosis" rows="2" class="w-full bg-gray-50 border-gray-200 rounded-xl"></textarea></div>
+                        <div><label class="block text-sm font-bold text-gray-700 mb-1">Motivo da Consulta</label><textarea v-model="form.chief_complaint" rows="2" class="w-full bg-gray-50 border-gray-200 rounded-xl focus:ring-pink-500 focus:border-pink-500"></textarea></div>
+                        <div><label class="block text-sm font-bold text-gray-700 mb-1">Diagnósticos Prévios?</label><textarea v-model="form.child_data.previous_diagnosis" rows="2" class="w-full bg-gray-50 border-gray-200 rounded-xl focus:ring-pink-500 focus:border-pink-500"></textarea></div>
                     </div>
 
                     <div v-if="currentStep === 1" class="space-y-5 animate-fade-in">
                         <h2 class="text-xl font-bold text-gray-800 border-b pb-3 mb-5">Rotina e Dieta</h2>
-                        <div><label class="block text-sm font-bold text-gray-700 mb-1">O que a criança costuma comer?</label><textarea v-model="form.child_data.diet_description" rows="2" class="w-full bg-gray-50 border-gray-200 rounded-xl"></textarea></div>
+                        <div><label class="block text-sm font-bold text-gray-700 mb-1">O que a criança costuma comer?</label><textarea v-model="form.child_data.diet_description" rows="2" class="w-full bg-gray-50 border-gray-200 rounded-xl focus:ring-pink-500 focus:border-pink-500"></textarea></div>
                         <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <div><label class="block text-sm font-bold text-gray-700 mb-1">Toma quanta água por dia?</label><input type="text" v-model="form.child_data.water_intake" class="w-full bg-gray-50 border-gray-200 rounded-xl"></div>
-                            <div><label class="block text-sm font-bold text-gray-700 mb-1">Tem alergias?</label><input type="text" v-model="form.child_data.allergies" class="w-full bg-gray-50 border-gray-200 rounded-xl"></div>
+                            <div><label class="block text-sm font-bold text-gray-700 mb-1">Toma quanta água por dia?</label><input type="text" v-model="form.child_data.water_intake" class="w-full bg-gray-50 border-gray-200 rounded-xl focus:ring-pink-500 focus:border-pink-500"></div>
+                            <div><label class="block text-sm font-bold text-gray-700 mb-1">Tem alergias?</label><input type="text" v-model="form.child_data.allergies" class="w-full bg-gray-50 border-gray-200 rounded-xl focus:ring-pink-500 focus:border-pink-500"></div>
                         </div>
-                        <div><label class="block text-sm font-bold text-gray-700 mb-1">Toma suplemento/remédio?</label><input type="text" v-model="form.child_data.supplements" class="w-full bg-gray-50 border-gray-200 rounded-xl"></div>
+                        <div><label class="block text-sm font-bold text-gray-700 mb-1">Toma suplemento/remédio?</label><input type="text" v-model="form.child_data.supplements" class="w-full bg-gray-50 border-gray-200 rounded-xl focus:ring-pink-500 focus:border-pink-500"></div>
                     </div>
 
                     <div v-if="currentStep === 2" class="animate-fade-in">
@@ -145,7 +146,9 @@ const submit = () => {
                 <div class="flex items-center justify-between mt-10 pt-6 border-t border-gray-100">
                     <button type="button" v-if="currentStep > 0" @click="currentStep--" class="px-5 py-2.5 font-bold text-gray-500 hover:bg-gray-100 rounded-xl transition-all">&larr; Voltar</button>
                     <div v-else></div> <button type="button" v-if="(form.type === 'adult' && currentStep < totalAdultSteps) || (form.type === 'child' && currentStep < totalChildSteps)" 
-                            @click="currentStep++" class="px-8 py-3 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl shadow-md transition-all flex items-center gap-2">
+                            @click="currentStep++" 
+                            :class="form.type === 'child' ? 'bg-pink-600 hover:bg-pink-700' : 'bg-indigo-600 hover:bg-indigo-700'"
+                            class="px-8 py-3 text-white font-bold rounded-xl shadow-md transition-all flex items-center gap-2">
                         Próximo <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M10.293 3.293a1 1 0 011.414 0l6 6a1 1 0 010 1.414l-6 6a1 1 0 01-1.414-1.414L14.586 11H3a1 1 0 110-2h11.586l-4.293-4.293a1 1 0 010-1.414z" clip-rule="evenodd" /></svg>
                     </button>
                     

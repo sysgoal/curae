@@ -2,12 +2,13 @@
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
 import { Head, useForm, Link } from '@inertiajs/vue3';
 import PrimaryButton from '@/Components/PrimaryButton.vue';
-import { ref, watch } from 'vue';
+import { ref } from 'vue';
 
 const props = defineProps({ patient: Object });
 
+// 1. Cálculo rigoroso da idade
 const getAge = (dob) => {
-    if (!dob) return 20;
+    if (!dob) return 20; // Se não tiver data, assume adulto
     const today = new Date(); const birthDate = new Date(dob);
     let age = today.getFullYear() - birthDate.getFullYear();
     const m = today.getMonth() - birthDate.getMonth();
@@ -16,19 +17,19 @@ const getAge = (dob) => {
 };
 
 const patientAge = getAge(props.patient.date_of_birth);
-const defaultType = patientAge < 14 ? 'child' : 'adult';
+
+// 2. Define e bloqueia o tipo de ficha (<= 6 anos = Infantil)
+const lockedType = patientAge <= 6 ? 'child' : 'adult';
 
 const form = useForm({
     patient_id: props.patient.id,
-    type: defaultType,
+    type: lockedType, // Tipo agora é estático e definido pela idade
     chief_complaint: '', family_history: '', patient_routine: '', symptoms_checklist: [],
     child_data: { weight: '', parents_names: '', previous_diagnosis: '', diet_description: '', water_intake: '', supplements: '', allergies: '', pain_complaint: '' },
     adult_data: { diet_routine: '', sleep_routine: '', medications: '', sun_exposure: '', past_trauma: '', birth_type: '', gastric_issues: '' }
 });
 
-// Navegação por Abas (Wizard)
 const currentStep = ref(0);
-watch(() => form.type, () => { currentStep.value = 0; }); // Reseta o passo ao trocar de tipo
 
 const adultSteps = ["📋 Dados Iniciais", "🍎 Gastro e Digestão", "⚡ Energia e Sono", "🩸 Hormônios e Pele", "📉 Sinais e Deficiências", "🧠 Emocional", "🦴 Dores e Corpo"];
 const childSteps = ["🧸 Dados Básicos", "🍼 Rotina e Alimentação", "🧩 Sinais e Comportamentos"];
@@ -62,14 +63,12 @@ const submit = () => {
     <AuthenticatedLayout>
         <template #header>
             <div class="flex justify-between items-center">
-                <h2 class="font-semibold text-xl text-gray-800 leading-tight">
+                <h2 class="font-semibold text-xl text-gray-800 leading-tight flex items-center gap-2">
                     Anamnese: <span class="font-black text-indigo-700">{{ patient.name }}</span>
+                    <span v-if="form.type === 'child'" class="text-[10px] bg-pink-100 text-pink-700 px-2.5 py-1 rounded-full font-black uppercase tracking-widest shadow-sm border border-pink-200">Ficha Pediátrica PCA</span>
+                    <span v-else class="text-[10px] bg-indigo-100 text-indigo-700 px-2.5 py-1 rounded-full font-black uppercase tracking-widest shadow-sm border border-indigo-200">Ficha Adulto Integrativa</span>
                 </h2>
-                <div class="flex bg-gray-100 p-1 rounded-lg">
-                    <button @click="form.type = 'adult'; form.symptoms_checklist = []" :class="form.type === 'adult' ? 'bg-white shadow-sm text-indigo-700 font-bold' : 'text-gray-500 hover:text-gray-700'" class="px-4 py-1.5 rounded-md text-sm transition-all">👩🏽‍🦱 Adulto</button>
-                    <button @click="form.type = 'child'; form.symptoms_checklist = []" :class="form.type === 'child' ? 'bg-white shadow-sm text-pink-700 font-bold' : 'text-gray-500 hover:text-gray-700'" class="px-4 py-1.5 rounded-md text-sm transition-all">🧸 Infantil</button>
                 </div>
-            </div>
         </template>
 
         <div class="py-8 max-w-7xl mx-auto sm:px-6 lg:px-8 flex flex-col md:flex-row gap-6">
@@ -116,7 +115,6 @@ const submit = () => {
                             <div v-if="currentStep === catIndex" class="animate-fade-in">
                                 <h2 class="text-2xl font-black text-indigo-900 mb-2">{{ adultSteps[catIndex] }}</h2>
                                 <p class="text-gray-500 text-sm mb-6">Assinale os sinais e sintomas relatados ou observados.</p>
-                                
                                 <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                                     <div v-for="(symp, idx) in adultCategories[catIndex - 1].items" :key="idx" 
                                          @click="toggleSymptom(symp)"
@@ -164,19 +162,10 @@ const submit = () => {
                     </div>
 
                     <div class="flex items-center justify-between mt-10 pt-6 border-t border-gray-100">
-                        <button type="button" @click="currentStep--" :disabled="currentStep === 0" class="px-6 py-2.5 font-bold text-gray-600 hover:bg-gray-100 rounded-xl disabled:opacity-30 transition-all">
-                            &larr; Anterior
-                        </button>
-                        
-                        <button type="button" v-if="(form.type === 'adult' && currentStep < 6) || (form.type === 'child' && currentStep < 2)" @click="currentStep++" class="px-8 py-2.5 bg-gray-800 hover:bg-black text-white font-bold rounded-xl shadow-md transition-all">
-                            Próximo Passo &rarr;
-                        </button>
-                        
-                        <PrimaryButton v-else :disabled="form.processing" class="bg-indigo-700 hover:bg-indigo-800 px-8 py-3 rounded-xl shadow-md text-sm uppercase">
-                            💾 Gravar Ficha Completa
-                        </PrimaryButton>
+                        <button type="button" @click="currentStep--" :disabled="currentStep === 0" class="px-6 py-2.5 font-bold text-gray-600 hover:bg-gray-100 rounded-xl disabled:opacity-30 transition-all">&larr; Anterior</button>
+                        <button type="button" v-if="(form.type === 'adult' && currentStep < 6) || (form.type === 'child' && currentStep < 2)" @click="currentStep++" class="px-8 py-2.5 bg-gray-800 hover:bg-black text-white font-bold rounded-xl shadow-md transition-all">Próximo Passo &rarr;</button>
+                        <PrimaryButton v-else :disabled="form.processing" class="bg-indigo-700 hover:bg-indigo-800 px-8 py-3 rounded-xl shadow-md text-sm uppercase">💾 Gravar Ficha Completa</PrimaryButton>
                     </div>
-
                 </form>
             </div>
         </div>
