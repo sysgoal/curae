@@ -26,6 +26,12 @@ const age = computed(() => {
     return `${currentAge} anos`;
 });
 
+const lastAnamnesis = computed(() => {
+    if (!props.patient.last_anamnesis_at) return 'Não preenchida';
+    const dt = new Date(props.patient.last_anamnesis_at);
+    return dt.toLocaleString('pt-BR', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+});
+
 // ==========================================
 // 🕒 LINHA DO TEMPO UNIFICADA E ORDENADA
 // ==========================================
@@ -164,6 +170,7 @@ const closePrescriptionModal = () => { showingPrescriptionModal.value = false; s
                                 <p><span class="font-semibold text-gray-600">Idade Calculada:</span> {{ age }}</p>
                                 <p><span class="font-semibold text-gray-600">CPF:</span> {{ patient.cpf }}</p>
                                 <p><span class="font-semibold text-gray-600">Telefone:</span> {{ patient.phone || 'Não informado' }}</p>
+                                <p><span class="font-semibold text-gray-600">Última Anamnese:</span> {{ lastAnamnesis }}</p>
                             </div>
                             <div class="mt-6 pt-4 border-t">
                                 <Link :href="route('patients.edit', patient.id)" class="text-indigo-600 hover:underline text-sm font-bold">Editar Ficha Cadastral</Link>

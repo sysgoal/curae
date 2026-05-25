@@ -61,6 +61,10 @@ class PublicAnamnesisController extends Controller
 
         Anamnesis::create($validated);
 
+        // Marcar no prontuário do paciente a data de preenchimento da anamnese
+        $patient->last_anamnesis_at = now();
+        $patient->save();
+
         return Inertia::render('Anamneses/PublicSuccess');
     }
 }
