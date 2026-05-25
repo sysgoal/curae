@@ -4,26 +4,34 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
-use Illuminate\Database\Eloquent\SoftDeletes;
 
 class Anamnesis extends Model
 {
-    use HasFactory, SoftDeletes;
+    use HasFactory;
 
-    protected $guarded = ['id'];
+    protected $fillable = [
+        'patient_id',
+        'professional_id',
+        'type',
+        'chief_complaint',
+        'family_history',
+        'patient_routine',
+        'symptoms_checklist',
+        'child_data'
+    ];
 
-    // Diz ao Laravel para converter automaticamente o JSON do banco para Array no PHP
     protected $casts = [
         'symptoms_checklist' => 'array',
+        'child_data' => 'array',
     ];
 
     public function patient()
     {
         return $this->belongsTo(Patient::class);
     }
-
+    
     public function professional()
     {
-        return $this->belongsTo(User::class, 'professional_id');
+        return $this->belongsTo(Professional::class);
     }
 }

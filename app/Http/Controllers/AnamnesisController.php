@@ -23,20 +23,20 @@ class AnamnesisController extends Controller
     {
         $validated = $request->validate([
             'patient_id' => 'required|exists:patients,id',
+            'type' => 'required|in:adult,child',
             'chief_complaint' => 'nullable|string',
             'family_history' => 'nullable|string',
             'patient_routine' => 'nullable|string',
             'symptoms_checklist' => 'nullable|array',
+            'child_data' => 'nullable|array',
         ]);
 
-        // Procura o perfil profissional do utilizador atualmente logado
         $professional = Professional::where('user_id', auth()->id())->first();
 
         if (!$professional) {
-            return back()->withErrors(['error' => 'Acesso negado: O seu utilizador não possui um perfil de profissional de saúde vinculado.']);
+            return back()->withErrors(['error' => 'Acesso negado: O seu utilizador não possui um perfil de profissional.']);
         }
 
-        // Injeta o ID correto do profissional na validação
         $validated['professional_id'] = $professional->id;
 
         Anamnesis::create($validated);
