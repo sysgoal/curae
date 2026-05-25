@@ -14,6 +14,7 @@ use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\PatientFileController;
 use App\Http\Controllers\AIController;
 use App\Http\Controllers\AiAssistantController;
+use App\Http\Controllers\PublicAnamnesisController;
 
 /*
 |--------------------------------------------------------------------------
@@ -39,18 +40,18 @@ Route::get('/dashboard', [DashboardController::class, 'index'])
 // -------------------------------------------------------------
 // O middleware 'signed' garante que a URL não foi adulterada
 Route::middleware('signed')->group(function () {
-    
+
     // Receita Digital Segura
     Route::get('/receita/{prescription}', [PrescriptionController::class, 'showPublic'])
         ->name('prescriptions.show.public');
-    
+
     // Formulário de Avaliação Pós-Consulta
     Route::get('/avaliacao/{feedback}', [FeedbackController::class, 'editPublic'])
         ->name('feedbacks.edit.public');
-        
+
     Route::put('/avaliacao/{feedback}', [FeedbackController::class, 'updatePublic'])
         ->name('feedbacks.update.public');
-    
+
     // Gráficos de Evolução do Paciente
     Route::get('/meus-graficos/{patient}', [EvolutionController::class, 'showPublicCharts'])
         ->name('evolutions.charts.public');
@@ -61,7 +62,13 @@ Route::middleware('signed')->group(function () {
 // -------------------------------------------------------------
 // O middleware 'auth' protege todas as rotas deste grupo
 Route::middleware(['auth', 'verified'])->prefix('painel')->group(function () {
-    
+
+
+
+    // 1. Coloque ESTA linha DENTRO do seu middleware 'auth' (junto das outras rotas)
+    Route::post('/patients/{patient}/anamnesis-link', [PublicAnamnesisController::class, 'generateLink'])->name('patients.anamnesis.link');
+
+
     // Dashboard Inicial (Agora renderizado via Vue.js/Inertia)
     Route::get('/', function () {
         return Inertia::render('Dashboard');
@@ -77,7 +84,7 @@ Route::middleware(['auth', 'verified'])->prefix('painel')->group(function () {
     Route::resource('anamneses', AnamnesisController::class)->except(['index']);
     Route::resource('evolutions', EvolutionController::class)->except(['index']);
     Route::resource('prescriptions', PrescriptionController::class)->except(['index']);
-    
+
     // Feedbacks recebidos (Apenas visualização no painel)
     Route::get('feedbacks', [FeedbackController::class, 'index'])->name('feedbacks.index');
     Route::get('feedbacks/{feedback}', [FeedbackController::class, 'show'])->name('feedbacks.show');
@@ -87,26 +94,32 @@ Route::middleware('auth')->group(function () {
     Route::get('/profile', [ProfileController::class, 'edit'])->name('profile.edit');
     Route::patch('/profile', [ProfileController::class, 'update'])->name('profile.update');
     Route::delete('/profile', [ProfileController::class, 'destroy'])->name('profile.destroy');
+
+    Route::get('/prescriptions/{prescription}/pdf', [App\Http\Controllers\PrescriptionController::class, 'generatePdf'])->name('prescriptions.pdf');
+    // Coloque esta linha PRIMEIRO
+    Route::patch('/appointments/{id}/status', [App\Http\Controllers\AppointmentController::class, 'updateStatus'])->name('appointments.updateStatus');
+
+    // E o resource DEPOIS
+    Route::resource('appointments', App\Http\Controllers\AppointmentController::class);
+
+
+    Route::post('/patient-files', [PatientFileController::class, 'store'])->name('patient-files.store');
+    Route::delete('/patient-files/{patientFile}', [PatientFileController::class, 'destroy'])->name('patient-files.destroy');
+
+
+    Route::post('/ask-ai', [AIController::class, 'ask']);
+
+    Route::post('/ai/analyze', [AiAssistantController::class, 'analyzeText'])->name('ai.analyze');
+    Route::post('/ai/protocol', [AiAssistantController::class, 'generateProtocol'])->name('ai.protocol');
+    Route::get('/ai/protocol/download', [AiAssistantController::class, 'downloadProtocolPdf'])->name('ai.protocol.download');
 });
-Route::get('/prescriptions/{prescription}/pdf', [App\Http\Controllers\PrescriptionController::class, 'generatePdf'])->name('prescriptions.pdf');
-// Coloque esta linha PRIMEIRO
-Route::patch('/appointments/{id}/status', [App\Http\Controllers\AppointmentController::class, 'updateStatus'])->name('appointments.updateStatus');
 
-// E o resource DEPOIS
-Route::resource('appointments', App\Http\Controllers\AppointmentController::class);
+// 2. Coloque ESTAS DUAS linhas FORA do middleware 'auth' (podem ir para o final do ficheiro)
+Route::get('/ficha-clinica/{patient}/{professional}', [PublicAnamnesisController::class, 'create'])->name('public.anamnesis.create')->middleware('signed');
+Route::post('/ficha-clinica/{patient}/{professional}', [PublicAnamnesisController::class, 'store'])->name('public.anamnesis.store')->middleware('signed');
 
-
-Route::post('/patient-files', [PatientFileController::class, 'store'])->name('patient-files.store');
-Route::delete('/patient-files/{patientFile}', [PatientFileController::class, 'destroy'])->name('patient-files.destroy');
-
-
-Route::post('/ask-ai', [AIController::class, 'ask']);
-
-Route::post('/ai/analyze', [AiAssistantController::class, 'analyzeText'])->name('ai.analyze');
-Route::post('/ai/protocol', [AiAssistantController::class, 'generateProtocol'])->name('ai.protocol');
-Route::get('/ai/protocol/download', [AiAssistantController::class, 'downloadProtocolPdf'])->name('ai.protocol.download');
 // -------------------------------------------------------------
 // AUTENTICAÇÃO (Breeze)
 // -------------------------------------------------------------
 // Carrega as rotas de Login, Registro, Logout e Recuperação de Senha do Vue
-require __DIR__.'/auth.php';
+require __DIR__ . '/auth.php';

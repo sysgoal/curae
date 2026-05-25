@@ -29,12 +29,13 @@ class AnamnesisController extends Controller
             'patient_routine' => 'nullable|string',
             'symptoms_checklist' => 'nullable|array',
             'child_data' => 'nullable|array',
+            'adult_data' => 'nullable|array', // Adicionado
         ]);
 
         $professional = Professional::where('user_id', auth()->id())->first();
 
         if (!$professional) {
-            return back()->withErrors(['error' => 'Acesso negado: O seu utilizador não possui um perfil de profissional.']);
+            return back()->withErrors(['error' => 'Acesso negado: O seu utilizador não possui um perfil de profissional de saúde vinculado.']);
         }
 
         $validated['professional_id'] = $professional->id;
