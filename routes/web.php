@@ -16,7 +16,7 @@ use App\Http\Controllers\AiAssistantController;
 use App\Http\Controllers\PublicAnamnesisController;
 use App\Http\Controllers\AiController;
 use App\Http\Controllers\ExamRequestController;
-
+use App\Http\Controllers\UserController;
 // Rota inicial redireciona para o login
 Route::get('/', function () {
     return redirect()->route('login');
@@ -50,6 +50,10 @@ Route::middleware(['auth', 'verified'])->group(function () {
     // ---------------------------------------------------------
     Route::middleware(['role:admin'])->group(function () {
         Route::resource('professionals', ProfessionalController::class);
+        Route::get('/users', [UserController::class, 'index'])->name('users.index');
+        Route::post('/users', [UserController::class, 'store'])->name('users.store');
+        Route::delete('/users/{id}', [UserController::class, 'destroy'])->name('users.destroy');
+
     });
 
     // ---------------------------------------------------------

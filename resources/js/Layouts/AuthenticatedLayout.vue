@@ -46,6 +46,9 @@ const hasRole = (rolesAllowed) => {
                                 <NavLink v-if="hasRole([])" :href="route('professionals.index')" :active="route().current('professionals.*')">
                                     Equipa Técnica
                                 </NavLink>
+                                <NavLink v-if="$page.props.auth?.roles?.includes('admin')" :href="route('users.index')" :active="route().current('users.*')">
+        Equipe e Usuários
+    </NavLink>
                             </div>
                         </div>
 
