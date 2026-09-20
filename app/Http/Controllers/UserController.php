@@ -13,7 +13,6 @@ class UserController extends Controller
 {
     public function index()
     {
-        // Lista todos os utilizadores com os respetivos cargos
         $users = User::with('roles')->orderBy('name')->get()->map(function($user) {
             return [
                 'id' => $user->id,
@@ -24,7 +23,6 @@ class UserController extends Controller
             ];
         });
 
-        // Traz os cargos disponíveis na base de dados para o formulário
         $roles = Role::orderBy('name')->get();
 
         return Inertia::render('Users/Index', [
@@ -40,19 +38,19 @@ class UserController extends Controller
             'email' => 'required|string|email|max:255|unique:users',
             'password' => 'required|string|min:8',
             'role' => 'required|exists:roles,name'
+        ], [
+            'email.unique' => 'Este endereço de e-mail já está a ser utilizado por outro utilizador.',
+            'password.min' => 'A senha deve ter pelo menos 8 caracteres.'
         ]);
 
-        // 1. Cria o utilizador com a senha encriptada
         $user = User::create([
             'name' => $validated['name'],
             'email' => $validated['email'],
             'password' => Hash::make($validated['password']),
         ]);
 
-        // 2. Atribui o cargo de acesso ao sistema
         $user->assignRole($validated['role']);
 
-        // 3. Automação: Se for um profissional de saúde, cria o perfil dele na agenda
         if (in_array($validated['role'], ['professional', 'medico', 'dentista', 'fisioterapeuta'])) {
             Professional::create([
                 'user_id' => $user->id,
@@ -65,13 +63,50 @@ class UserController extends Controller
         return redirect()->back()->with('success', 'Utilizador criado com sucesso!');
     }
 
+    public function update(Request $request, $id)
+    {
+        $user = User::findOrFail($id);
+
+        $validated = $request->validate([
+            'name' => 'required|string|max:255',
+            'email' => 'required|string|email|max:255|unique:users,email,' . $user->id,
+            'password' => 'nullable|string|min:8',
+            'role' => 'required|exists:roles,name'
+        ], [
+            'email.unique' => 'Este endereço de e-mail já está a ser utilizado por outro utilizador.',
+            'password.min' => 'A senha deve ter pelo menos 8 caracteres.'
+        ]);
+
+        $user->name = $validated['name'];
+        $user->email = $validated['email'];
+
+        // Só atualiza a senha se o utilizador digitou uma nova
+        if (!empty($validated['password'])) {
+            $user->password = Hash::make($validated['password']);
+        }
+
+        $user->save();
+
+        // Atualiza os privilégios
+        $user->syncRoles([$validated['role']]);
+
+        // Se passou a ser um profissional (ou mudou de nome/email), atualiza na tabela da agenda
+        if (in_array($validated['role'], ['professional', 'medico', 'dentista', 'fisioterapeuta'])) {
+            Professional::updateOrCreate(
+                ['user_id' => $user->id],
+                ['name' => $user->name, 'email' => $user->email, 'is_active' => true]
+            );
+        }
+
+        return redirect()->back()->with('success', 'Dados do utilizador atualizados com sucesso!');
+    }
+
     public function destroy($id)
     {
         $user = User::findOrFail($id);
         
-        // Impede que o administrador apague a própria conta por acidente
         if ($user->id === auth()->id()) {
-            return back()->withErrors(['error' => 'Ação bloqueada: Não pode remover a sua própria conta.']);
+            return back()->with('error', 'Ação bloqueada: Não pode remover a sua própria conta.');
         }
         
         $user->delete();

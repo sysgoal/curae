@@ -48,13 +48,12 @@ Route::middleware(['auth', 'verified'])->group(function () {
     // ---------------------------------------------------------
     // PERFIL EXCLUSIVO: ADMINISTRADOR GERAL
     // ---------------------------------------------------------
-    Route::middleware(['role:admin'])->group(function () {
-        Route::resource('professionals', ProfessionalController::class);
-        Route::get('/users', [UserController::class, 'index'])->name('users.index');
-        Route::post('/users', [UserController::class, 'store'])->name('users.store');
-        Route::delete('/users/{id}', [UserController::class, 'destroy'])->name('users.destroy');
-
-    });
+   Route::middleware(['auth', 'role:admin'])->group(function () {
+    Route::get('/users', [UserController::class, 'index'])->name('users.index');
+    Route::post('/users', UserController::class, 'store'])->name('users.store');
+    Route::put('/users/{id}', [UserController::class, 'update'])->name('users.update');
+    Route::delete('/users/{id}', [UserController::class, 'destroy'])->name('users.destroy');
+});
 
     // ---------------------------------------------------------
     // ACESSO ADMINISTRATIVO COMPARTILHADO (Admin + Secretaria)
