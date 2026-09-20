@@ -118,6 +118,20 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::post('/ai/analyze', [AiController::class, 'analyze'])->name('ai.analyze');
         
     });
+
+    Route::get('/atualizar-banco', function () {
+    if (!\Illuminate\Support\Facades\Schema::hasColumn('professionals', 'council_number')) {
+        \Illuminate\Support\Facades\Schema::table('professionals', function ($table) {
+            $table->string('phone')->nullable();
+            $table->string('specialty')->nullable();
+            $table->string('council_type')->nullable();
+            $table->string('council_number')->nullable();
+        });
+        return 'Sucesso: As colunas do Conselho Médico foram adicionadas à base de dados!';
+    }
+    return 'Tudo OK: As colunas já existem na base de dados.';
+});
+
 });
 
 require __DIR__ . '/auth.php';

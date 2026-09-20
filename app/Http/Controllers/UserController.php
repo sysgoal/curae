@@ -11,15 +11,30 @@ use Spatie\Permission\Models\Role;
 
 class UserController extends Controller
 {
+    // Cobre todas as possibilidades de escrita de cargos para nunca falhar a criação na Agenda
+    private $rolesProfissionais = [
+        'professional', 'medico', 'médico', 'medica', 'médica', 
+        'dentista', 'fisioterapeuta', 'enfermeiro', 'enfermeira'
+    ];
+
     public function index()
     {
-        $users = User::with('roles')->orderBy('name')->get()->map(function($user) {
+        $usersRaw = User::with('roles')->orderBy('name')->get();
+        $professionals = Professional::whereIn('user_id', $usersRaw->pluck('id'))->get()->keyBy('user_id');
+
+        $users = $usersRaw->map(function($user) use ($professionals) {
+            $prof = $professionals->get($user->id);
             return [
                 'id' => $user->id,
                 'name' => $user->name,
                 'email' => $user->email,
                 'role' => $user->roles->first() ? $user->roles->first()->name : 'Sem Cargo',
-                'created_at' => $user->created_at->format('d/m/Y')
+                'created_at' => $user->created_at->format('d/m/Y'),
+                
+                'phone' => $prof ? $prof->phone : '',
+                'specialty' => $prof ? $prof->specialty : '',
+                'council_type' => $prof ? $prof->council_type : '',
+                'council_number' => $prof ? $prof->council_number : '',
             ];
         });
 
@@ -37,10 +52,12 @@ class UserController extends Controller
             'name' => 'required|string|max:255',
             'email' => 'required|string|email|max:255|unique:users',
             'password' => 'required|string|min:8',
-            'role' => 'required|exists:roles,name'
-        ], [
-            'email.unique' => 'Este endereço de e-mail já está a ser utilizado por outro utilizador.',
-            'password.min' => 'A senha deve ter pelo menos 8 caracteres.'
+            'role' => 'required|exists:roles,name',
+            
+            'phone' => 'nullable|string|max:20',
+            'specialty' => 'nullable|string|max:255',
+            'council_type' => 'nullable|string|max:50',
+            'council_number' => 'nullable|string|max:50',
         ]);
 
         $user = User::create([
@@ -51,16 +68,24 @@ class UserController extends Controller
 
         $user->assignRole($validated['role']);
 
-        if (in_array($validated['role'], ['professional', 'medico', 'dentista', 'fisioterapeuta'])) {
+        // Se o utilizador preencheu os campos clínicos OU se o cargo for de saúde, cria o Profissional
+        $isHealthRole = in_array(strtolower($validated['role']), $this->rolesProfissionais);
+        $hasClinicalData = !empty($validated['council_number']) || !empty($validated['specialty']);
+
+        if ($isHealthRole || $hasClinicalData) {
             Professional::create([
                 'user_id' => $user->id,
                 'name' => $user->name,
                 'email' => $user->email,
+                'phone' => $validated['phone'] ?? null,
+                'specialty' => $validated['specialty'] ?? null,
+                'council_type' => $validated['council_type'] ?? null,
+                'council_number' => $validated['council_number'] ?? null,
                 'is_active' => true
             ]);
         }
 
-        return redirect()->back()->with('success', 'Utilizador criado com sucesso!');
+        return redirect()->back()->with('success', 'Utilizador registado com sucesso!');
     }
 
     public function update(Request $request, $id)
@@ -71,34 +96,45 @@ class UserController extends Controller
             'name' => 'required|string|max:255',
             'email' => 'required|string|email|max:255|unique:users,email,' . $user->id,
             'password' => 'nullable|string|min:8',
-            'role' => 'required|exists:roles,name'
-        ], [
-            'email.unique' => 'Este endereço de e-mail já está a ser utilizado por outro utilizador.',
-            'password.min' => 'A senha deve ter pelo menos 8 caracteres.'
+            'role' => 'required|exists:roles,name',
+            
+            'phone' => 'nullable|string|max:20',
+            'specialty' => 'nullable|string|max:255',
+            'council_type' => 'nullable|string|max:50',
+            'council_number' => 'nullable|string|max:50',
         ]);
 
         $user->name = $validated['name'];
         $user->email = $validated['email'];
 
-        // Só atualiza a senha se o utilizador digitou uma nova
         if (!empty($validated['password'])) {
             $user->password = Hash::make($validated['password']);
         }
 
         $user->save();
-
-        // Atualiza os privilégios
         $user->syncRoles([$validated['role']]);
 
-        // Se passou a ser um profissional (ou mudou de nome/email), atualiza na tabela da agenda
-        if (in_array($validated['role'], ['professional', 'medico', 'dentista', 'fisioterapeuta'])) {
+        $isHealthRole = in_array(strtolower($validated['role']), $this->rolesProfissionais);
+        $hasClinicalData = !empty($validated['council_number']) || !empty($validated['specialty']);
+
+        if ($isHealthRole || $hasClinicalData) {
             Professional::updateOrCreate(
                 ['user_id' => $user->id],
-                ['name' => $user->name, 'email' => $user->email, 'is_active' => true]
+                [
+                    'name' => $user->name, 
+                    'email' => $user->email,
+                    'phone' => $validated['phone'] ?? null,
+                    'specialty' => $validated['specialty'] ?? null,
+                    'council_type' => $validated['council_type'] ?? null,
+                    'council_number' => $validated['council_number'] ?? null,
+                    'is_active' => true
+                ]
             );
+        } else {
+            Professional::where('user_id', $user->id)->update(['is_active' => false]);
         }
 
-        return redirect()->back()->with('success', 'Dados do utilizador atualizados com sucesso!');
+        return redirect()->back()->with('success', 'Dados atualizados com sucesso!');
     }
 
     public function destroy($id)
@@ -109,7 +145,9 @@ class UserController extends Controller
             return back()->with('error', 'Ação bloqueada: Não pode remover a sua própria conta.');
         }
         
+        Professional::where('user_id', $user->id)->delete();
         $user->delete();
+        
         return redirect()->back()->with('success', 'Utilizador removido do sistema.');
     }
 }

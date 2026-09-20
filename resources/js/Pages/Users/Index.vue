@@ -21,7 +21,11 @@ const form = useForm({
     name: '',
     email: '',
     password: '',
-    role: ''
+    role: '',
+    phone: '',
+    specialty: '',
+    council_type: '',
+    council_number: ''
 });
 
 const openCreateModal = () => {
@@ -36,10 +40,17 @@ const openEditModal = (user) => {
     isEditing.value = true;
     editingUserId.value = user.id;
     form.clearErrors();
+    
     form.name = user.name;
     form.email = user.email;
-    form.password = ''; // A senha vai em branco, se não for preenchida, não é alterada
+    form.password = ''; 
     form.role = user.role !== 'Sem Cargo' ? user.role : '';
+    
+    form.phone = user.phone || '';
+    form.specialty = user.specialty || '';
+    form.council_type = user.council_type || '';
+    form.council_number = user.council_number || '';
+    
     showingModal.value = true;
 };
 
@@ -69,16 +80,12 @@ const deleteUser = (id) => {
     <AuthenticatedLayout>
         <div class="py-12 max-w-7xl mx-auto sm:px-6 lg:px-8">
             
-            <!-- Mensagens de Sucesso Globais -->
             <div v-if="$page.props.flash?.success" class="mb-6 bg-green-50 text-green-700 p-4 rounded-xl border border-green-200 font-bold shadow-sm flex items-center gap-2">
-                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd" /></svg>
-                {{ $page.props.flash.success }}
+                ✅ {{ $page.props.flash.success }}
             </div>
 
-            <!-- Mensagens de Erro Globais -->
             <div v-if="$page.props.flash?.error" class="mb-6 bg-red-50 text-red-700 p-4 rounded-xl border border-red-200 font-bold shadow-sm flex items-center gap-2">
-                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clip-rule="evenodd" /></svg>
-                {{ $page.props.flash.error }}
+                ❌ {{ $page.props.flash.error }}
             </div>
 
             <div class="bg-white overflow-hidden shadow-sm sm:rounded-2xl border border-gray-100">
@@ -87,7 +94,7 @@ const deleteUser = (id) => {
                         <h3 class="text-lg font-black text-gray-900">Equipa e Acessos</h3>
                         <p class="text-xs text-gray-500 mt-0.5">Crie e edite acessos para médicos, secretárias e administradores.</p>
                     </div>
-                    <button @click="openCreateModal" class="bg-indigo-600 hover:bg-indigo-700 text-white px-5 py-2.5 rounded-lg font-bold text-sm shadow-sm transition-all flex justify-center items-center gap-2">
+                    <button @click="openCreateModal" class="bg-indigo-600 hover:bg-indigo-700 text-white px-5 py-2.5 rounded-lg font-bold text-sm shadow-sm transition-all">
                         + Novo Utilizador
                     </button>
                 </div>
@@ -97,7 +104,7 @@ const deleteUser = (id) => {
                         <thead>
                             <tr class="bg-gray-50 border-b text-xs uppercase tracking-wider text-gray-500 font-black">
                                 <th class="p-4">Nome e Contacto</th>
-                                <th class="p-4">Perfil de Acesso</th>
+                                <th class="p-4">Perfil / Conselho</th>
                                 <th class="p-4">Membro Desde</th>
                                 <th class="p-4 text-right">Ações</th>
                             </tr>
@@ -113,19 +120,15 @@ const deleteUser = (id) => {
                                           :class="user.role === 'admin' ? 'bg-red-50 text-red-700 border-red-200' : 'bg-indigo-50 text-indigo-700 border-indigo-200'">
                                         {{ user.role }}
                                     </span>
+                                    <div v-if="user.council_number" class="text-xs font-bold text-gray-500 mt-1">
+                                        {{ user.council_type }}: {{ user.council_number }}
+                                    </div>
                                 </td>
                                 <td class="p-4 text-gray-600 font-medium">{{ user.created_at }}</td>
-                                <td class="p-4 text-right space-x-2 flex items-center justify-end">
-                                    <button @click="openEditModal(user)" class="text-indigo-600 hover:text-indigo-800 font-bold text-xs bg-indigo-50 hover:bg-indigo-100 px-3 py-2 rounded-lg transition-colors">
-                                        Editar
-                                    </button>
-                                    <button @click="deleteUser(user.id)" class="text-red-500 hover:text-red-700 font-bold text-xs bg-red-50 hover:bg-red-100 px-3 py-2 rounded-lg transition-colors">
-                                        Remover
-                                    </button>
+                                <td class="p-4 text-right space-x-2">
+                                    <button @click="openEditModal(user)" class="text-indigo-600 hover:text-indigo-800 font-bold text-xs bg-indigo-50 hover:bg-indigo-100 px-3 py-2 rounded-lg">Editar</button>
+                                    <button @click="deleteUser(user.id)" class="text-red-500 hover:text-red-700 font-bold text-xs bg-red-50 hover:bg-red-100 px-3 py-2 rounded-lg">Remover</button>
                                 </td>
-                            </tr>
-                            <tr v-if="users.length === 0">
-                                <td colspan="4" class="p-8 text-center text-gray-400">Nenhum utilizador encontrado.</td>
                             </tr>
                         </tbody>
                     </table>
@@ -133,7 +136,6 @@ const deleteUser = (id) => {
             </div>
         </div>
 
-        <!-- MODAL DE CRIAÇÃO / EDIÇÃO -->
         <Modal :show="showingModal" @close="showingModal = false" maxWidth="md">
             <div class="p-6">
                 <h3 class="text-lg font-black text-gray-900 border-b pb-3 mb-5">
@@ -141,22 +143,25 @@ const deleteUser = (id) => {
                 </h3>
                 
                 <form @submit.prevent="submitUser" class="space-y-4">
+                    
+                    <!-- DADOS DE ACESSO -->
                     <div>
                         <InputLabel value="Nome Completo *" />
                         <TextInput type="text" class="mt-1 block w-full text-sm" v-model="form.name" required autofocus />
                         <InputError class="mt-2" :message="form.errors.name" />
                     </div>
 
-                    <div>
-                        <InputLabel value="Email de Login *" />
-                        <TextInput type="email" class="mt-1 block w-full text-sm" v-model="form.email" required />
-                        <InputError class="mt-2" :message="form.errors.email" />
-                    </div>
-
-                    <div>
-                        <InputLabel :value="isEditing ? 'Nova Senha (deixe em branco para manter a atual)' : 'Senha de Acesso *'" />
-                        <TextInput type="password" class="mt-1 block w-full text-sm" v-model="form.password" :required="!isEditing" placeholder="Mínimo de 8 caracteres" />
-                        <InputError class="mt-2" :message="form.errors.password" />
+                    <div class="grid grid-cols-2 gap-4">
+                        <div>
+                            <InputLabel value="Email de Login *" />
+                            <TextInput type="email" class="mt-1 block w-full text-sm" v-model="form.email" required />
+                            <InputError class="mt-2" :message="form.errors.email" />
+                        </div>
+                        <div>
+                            <InputLabel :value="isEditing ? 'Nova Senha (opcional)' : 'Senha de Acesso *'" />
+                            <TextInput type="password" class="mt-1 block w-full text-sm" v-model="form.password" :required="!isEditing" placeholder="Mín. 8 caract." />
+                            <InputError class="mt-2" :message="form.errors.password" />
+                        </div>
                     </div>
 
                     <div>
@@ -168,10 +173,47 @@ const deleteUser = (id) => {
                         <InputError class="mt-2" :message="form.errors.role" />
                     </div>
 
+                    <!-- DADOS CLÍNICOS (Sempre visíveis agora) -->
+                    <div class="mt-6 pt-4 border-t border-gray-100 bg-gray-50 -mx-6 px-6 pb-2">
+                        <h4 class="text-sm font-black text-indigo-700 mb-4 flex items-center gap-2">
+                            ⚕️ Dados do Profissional Clínico (Preencha se for o caso)
+                        </h4>
+                        
+                        <div class="grid grid-cols-2 gap-4 mb-4">
+                            <div>
+                                <InputLabel value="Especialidade Principal" />
+                                <TextInput type="text" class="mt-1 block w-full text-sm" v-model="form.specialty" placeholder="Ex: Cardiologia" />
+                            </div>
+                            <div>
+                                <InputLabel value="Telefone / Telemóvel" />
+                                <TextInput type="text" class="mt-1 block w-full text-sm" v-model="form.phone" />
+                            </div>
+                        </div>
+
+                        <div class="grid grid-cols-2 gap-4 mb-4">
+                            <div>
+                                <InputLabel value="Órgão de Classe" />
+                                <select v-model="form.council_type" class="mt-1 block w-full border-gray-300 focus:border-indigo-500 rounded-lg shadow-sm text-sm">
+                                    <option value="">Selecione...</option>
+                                    <option value="CRM">CRM (Médico)</option>
+                                    <option value="COREN">COREN (Enfermagem)</option>
+                                    <option value="CRO">CRO (Odontologia)</option>
+                                    <option value="CREFITO">CREFITO (Fisioterapia)</option>
+                                    <option value="CRP">CRP (Psicologia)</option>
+                                    <option value="Outro">Outro</option>
+                                </select>
+                            </div>
+                            <div>
+                                <InputLabel value="Número de Registo" />
+                                <TextInput type="text" class="mt-1 block w-full text-sm" v-model="form.council_number" placeholder="Ex: 12345-MG" />
+                            </div>
+                        </div>
+                    </div>
+
                     <div class="flex items-center justify-end pt-4 border-t gap-3 mt-6">
                         <button type="button" @click="showingModal = false" class="text-sm font-bold text-gray-600 hover:text-gray-900">Cancelar</button>
                         <PrimaryButton :disabled="form.processing" class="bg-indigo-600 hover:bg-indigo-700">
-                            {{ isEditing ? 'Guardar Alterações' : 'Registar Utilizador' }}
+                            {{ isEditing ? 'Guardar Alterações' : 'REGISTAR UTILIZADOR' }}
                         </PrimaryButton>
                     </div>
                 </form>

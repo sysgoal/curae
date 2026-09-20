@@ -7,6 +7,7 @@ import PrimaryButton from '@/Components/PrimaryButton.vue';
 import TextInput from '@/Components/TextInput.vue';
 import InputLabel from '@/Components/InputLabel.vue';
 import InputError from '@/Components/InputError.vue';
+import SearchableSelect from '@/Components/SearchableSelect.vue';
 
 // Importações do FullCalendar
 import FullCalendar from '@fullcalendar/vue3';
@@ -23,12 +24,16 @@ const props = defineProps({
 });
 
 const page = usePage();
-// Começamos com a aba do calendário aberta por padrão!
 const activeTab = ref('calendar'); 
 
 const canManageOthers = computed(() => {
     const roles = page.props.auth?.roles || [];
     return roles.includes('admin') || roles.includes('secretaria');
+});
+
+// Adiciona a opção "Equipe Completa" no dropdown de profissionais
+const professionalOptions = computed(() => {
+    return [{ id: '', name: 'Equipe Completa (Todos)' }, ...props.professionals];
 });
 
 const selectedFilterProfessional = ref(props.filters?.professional_id || '');
@@ -49,7 +54,6 @@ const form = useForm({
     notes: ''
 });
 
-// Watch corrigido para não quebrar a string ISO do Date
 watch(() => form.start_time, (newStart) => {
     if (newStart) {
         const startDate = new Date(newStart);
@@ -119,7 +123,7 @@ const calendarEvents = computed(() => {
         if (appt.status !== 'cancelado') {
             events.push({
                 id: 'appt-' + appt.id,
-                title: `${appt.patient?.name} (${appt.status}) - [${appt.professional?.name}]`,
+                title: `${appt.patient?.name} (${appt.status})`,
                 start: appt.start_time,
                 end: appt.end_time,
                 backgroundColor: appt.status === 'concluido' ? '#10B981' : '#4F46E5', 
@@ -159,17 +163,9 @@ const calendarOptions = ref({
     },
     events: calendarEvents,
     allDaySlot: false,
-    eventDisplay: 'block',     // Força os eventos a terem fundo colorido na visão de Mês
-    displayEventTime: true,    
-    
-    // AJUSTES PARA TELAS MENORES (14")
     slotMinTime: '07:00:00',
-    slotMaxTime: '19:00:00',
-    aspectRatio: 2.0,
-    height: 600,
-    expandRows: true,
-    stickyHeaderDates: true,
-    
+    slotMaxTime: '22:00:00',
+    height: 'auto',
     eventClick: (info) => {
         alert('Detalhes: ' + info.event.title);
     }
@@ -223,20 +219,21 @@ const calendarOptions = ref({
 
                     <div v-if="canManageOthers" class="w-full md:w-auto flex items-center gap-2">
                         <span class="text-xs font-bold text-gray-500 uppercase whitespace-nowrap">Filtrar Agenda:</span>
-                        <select v-model="selectedFilterProfessional" @change="filterAppointments" class="border-gray-300 rounded-lg text-sm w-full md:w-56 focus:border-indigo-500 focus:ring-indigo-500">
-                            <option value="">Equipe Completa</option>
-                            <option v-for="prof in professionals" :key="prof.id" :value="prof.id">{{ prof.name }}</option>
-                        </select>
+                        <div class="w-full md:w-64">
+                            <SearchableSelect 
+                                v-model="selectedFilterProfessional" 
+                                :options="professionalOptions" 
+                                @change="filterAppointments" 
+                                placeholder="Pesquisar profissional..." 
+                            />
+                        </div>
                     </div>
                 </div>
 
-                <!-- 1. CALENDÁRIO FULLCALENDAR (USANDO v-show PARA NÃO PERDER A RENDERIZAÇÃO) -->
-                <!-- REMOVIDO min-h-[600px] PARA QUE O CALENDÁRIO GERENCIE A ALTURA -->
-                <div v-show="activeTab === 'calendar'" class="p-6 bg-white overflow-x-auto">
+                <div v-show="activeTab === 'calendar'" class="p-6 bg-white overflow-x-auto min-h-[600px]">
                     <FullCalendar :options="calendarOptions" />
                 </div>
 
-                <!-- 2. LISTA DE CONSULTAS (TABELA) -->
                 <table v-show="activeTab === 'appointments'" class="w-full text-left border-collapse">
                     <thead>
                         <tr class="bg-white border-b text-xs uppercase tracking-wider text-gray-500 font-black">
@@ -272,15 +269,12 @@ const calendarOptions = ref({
                                     <option value="concluido">Concluir Consulta</option>
                                     <option value="cancelado">Cancelar Consulta</option>
                                 </select>
-                                <button @click="deleteAppointment(appt.id)" class="text-red-500 hover:text-red-700 font-bold text-xs bg-red-50 hover:bg-red-100 p-2 rounded-lg transition-colors">
-                                    ✕
-                                </button>
+                                <button @click="deleteAppointment(appt.id)" class="text-red-500 hover:text-red-700 font-bold text-xs bg-red-50 hover:bg-red-100 p-2 rounded-lg transition-colors">✕</button>
                             </td>
                         </tr>
                     </tbody>
                 </table>
 
-                <!-- 3. LISTA DE INDISPONIBILIDADES (TABELA) -->
                 <table v-show="activeTab === 'blocks'" class="w-full text-left border-collapse bg-red-50/10">
                     <thead>
                         <tr class="bg-white border-b text-xs uppercase tracking-wider text-red-500 font-black">
@@ -311,26 +305,27 @@ const calendarOptions = ref({
             </div>
         </div>
 
-        <!-- MODAL DE NOVA MARCAÇÃO -->
         <Modal :show="showingCreateModal" @close="showingCreateModal = false" maxWidth="md">
-            <div class="p-6">
+            <div class="p-6 overflow-visible">
                 <h3 class="text-lg font-black text-gray-900 border-b pb-3 mb-5">Nova Marcação</h3>
                 
                 <form @submit.prevent="submitAppointment" class="space-y-5">
                     <div>
                         <InputLabel value="Paciente *" />
-                        <select v-model="form.patient_id" class="mt-1 block w-full border-gray-300 focus:border-indigo-500 rounded-lg shadow-sm" required>
-                            <option value="" disabled>Selecione o paciente...</option>
-                            <option v-for="pat in patients" :key="pat.id" :value="pat.id">{{ pat.name }}</option>
-                        </select>
+                        <SearchableSelect 
+                            v-model="form.patient_id" 
+                            :options="patients" 
+                            placeholder="Pesquise o paciente pelo nome..." 
+                        />
                     </div>
 
                     <div v-if="canManageOthers">
                         <InputLabel value="Profissional Responsável *" />
-                        <select v-model="form.professional_id" class="mt-1 block w-full border-gray-300 focus:border-indigo-500 rounded-lg shadow-sm" required>
-                            <option value="" disabled>Selecione o profissional...</option>
-                            <option v-for="prof in professionals" :key="prof.id" :value="prof.id">{{ prof.name }}</option>
-                        </select>
+                        <SearchableSelect 
+                            v-model="form.professional_id" 
+                            :options="professionals" 
+                            placeholder="Pesquise o profissional..." 
+                        />
                     </div>
 
                     <div class="grid grid-cols-2 gap-4">
@@ -357,19 +352,19 @@ const calendarOptions = ref({
             </div>
         </Modal>
 
-        <!-- MODAL DE BLOQUEIO DE HORÁRIO -->
         <Modal :show="showingBlockModal" @close="showingBlockModal = false" maxWidth="md">
-            <div class="p-0 overflow-hidden">
+            <div class="p-0 overflow-visible">
                 <div class="bg-gray-900 text-white p-5 flex justify-between items-center">
                     <h3 class="font-black text-lg flex items-center gap-2">🚫 Definir Indisponibilidade</h3>
                 </div>
                 <form @submit.prevent="submitBlock" class="p-6 space-y-5 bg-white">
                     <div v-if="canManageOthers">
                         <InputLabel value="Profissional *" />
-                        <select v-model="blockForm.professional_id" class="mt-1 block w-full border-gray-300 rounded-lg shadow-sm" required>
-                            <option value="" disabled>Selecione o membro...</option>
-                            <option v-for="prof in professionals" :key="prof.id" :value="prof.id">{{ prof.name }}</option>
-                        </select>
+                        <SearchableSelect 
+                            v-model="blockForm.professional_id" 
+                            :options="professionals" 
+                            placeholder="Pesquise o membro da equipa..." 
+                        />
                     </div>
 
                     <div class="grid grid-cols-2 gap-4">
@@ -395,6 +390,5 @@ const calendarOptions = ref({
                 </form>
             </div>
         </Modal>
-
     </AuthenticatedLayout>
 </template>

@@ -40,10 +40,8 @@ class PatientController extends Controller
 
     public function show(Patient $patient)
     {
-        // Procura a data da anamnese mais recente deste paciente
         $lastAnamnesis = $patient->anamneses()->latest()->first();
 
-        // Procura o agendamento mais recente que já tenha sido realizado ou agendado
         $lastAppointment = Appointment::where('patient_id', $patient->id)
             ->orderBy('appointment_date', 'desc')
             ->first();
@@ -51,11 +49,10 @@ class PatientController extends Controller
         return Inertia::render('Patients/Show', [
             'patient' => $patient,
             'anamneses' => $patient->anamneses()->with('professional')->get(),
-            'evolutions' => $patient->evolutions()->get(),
-            'prescriptions' => $patient->prescriptions()->get(),
+            'evolutions' => $patient->evolutions()->with('professional')->get(),
+            'prescriptions' => $patient->prescriptions()->with('professional')->get(),
             'examRequests' => $patient->examRequests()->with('professional')->latest()->get(),
             'files' => $patient->files()->get(),
-            // Envia as datas formatadas ou nulas para o frontend
             'last_anamnesis_date' => $lastAnamnesis ? $lastAnamnesis->created_at->toISOString() : null,
             'last_appointment_date' => $lastAppointment ? $lastAppointment->appointment_date : null,
         ]);
@@ -91,14 +88,10 @@ class PatientController extends Controller
             ->with('success', 'Paciente removido do sistema.');
     }
 
-    /**
-     * Gera uma visualização resumida e cronológica de todo o histórico do paciente.
-     */
     public function history(Patient $patient)
     {
         return Inertia::render('Patients/History', [
             'patient' => $patient,
-            // Carregamos os dados incluindo o profissional responsável por cada ato
             'anamneses' => $patient->anamneses()->with('professional')->get(),
             'evolutions' => $patient->evolutions()->with('professional')->get(),
             'prescriptions' => $patient->prescriptions()->with('professional')->get(),
