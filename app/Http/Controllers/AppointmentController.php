@@ -33,15 +33,11 @@ class AppointmentController extends Controller
             }
         }
 
-        // Transforma os dados no backend extraindo as partes exatas de cada coluna para evitar o "Double Date"
         $appointments = $query->orderBy('appointment_date', 'asc')->orderBy('start_time', 'asc')->get()->map(function($appt) {
-            
-            // Extraímos APENAS a data limpa e APENAS as horas limpas
             $dataLimpa = Carbon::parse($appt->appointment_date)->format('Y-m-d');
             $horaInicioLimpa = Carbon::parse($appt->start_time)->format('H:i:s');
             $horaFimLimpa = Carbon::parse($appt->end_time)->format('H:i:s');
 
-            // Montamos a string final já com o 'T' perfeito para o FullCalendar do Vue.js
             $fullStartTime = $dataLimpa . 'T' . $horaInicioLimpa;
             $fullEndTime = $dataLimpa . 'T' . $horaFimLimpa;
 
@@ -60,10 +56,7 @@ class AppointmentController extends Controller
             ];
         });
 
-        // O mesmo cuidado para os Bloqueios da Agenda
         $scheduleBlocks = $blockQuery->where('end_time', '>=', now())->orderBy('start_time', 'asc')->get()->map(function($block) {
-            // Como os bloqueios não têm appointment_date (têm apenas datetime inteiro na start_time)
-            // A formatação é mais simples, apenas forçamos o T:
             return [
                 'id' => $block->id,
                 'professional_id' => $block->professional_id,
@@ -77,7 +70,15 @@ class AppointmentController extends Controller
         });
 
         if ($user->hasRole(['admin', 'secretaria'])) {
-            $professionals = Professional::where('is_active', true)->orderBy('name')->get();
+            $professionals = Professional::with('user')
+                ->where('is_active', true)
+                ->whereHas('user', function ($query) {
+                    $query->whereHas('roles', function ($roleQuery) {
+                        $roleQuery->whereNotIn('name', ['admin', 'secretaria']);
+                    });
+                })
+                ->orderBy('name')
+                ->get();
         } else {
             $professionals = Professional::where('user_id', $user->id)->get();
         }
@@ -96,26 +97,35 @@ class AppointmentController extends Controller
     public function store(Request $request)
     {
         $user = auth()->user();
-        $professionalId = $request->professional_id;
 
-        if (!$user->hasRole(['admin', 'secretaria'])) {
-            $professional = Professional::where('user_id', $user->id)->firstOrFail();
-            $professionalId = $professional->id;
-        }
-
-        $validated = $request->validate([
+        $rules = [
             'patient_id' => 'required|exists:patients,id',
             'start_time' => 'required|string', 
             'end_time' => 'required|string',
             'status' => 'required|string|in:agendado,concluido,cancelado',
             'notes' => 'nullable|string'
+        ];
+
+        if ($user->hasRole(['admin', 'secretaria'])) {
+            $rules['professional_id'] = 'required|exists:professionals,id';
+        }
+
+        $validated = $request->validate($rules, [
+            'professional_id.required' => 'É obrigatório selecionar um profissional de saúde.',
+            'professional_id.exists' => 'O usuário selecionado não é um profissional de saúde válido.'
         ]);
+
+        if ($user->hasRole(['admin', 'secretaria'])) {
+            $professionalId = $validated['professional_id'];
+        } else {
+            $professional = Professional::where('user_id', $user->id)->firstOrFail();
+            $professionalId = $professional->id;
+        }
 
         $startTime = Carbon::parse($validated['start_time'])->format('Y-m-d H:i:s');
         $endTime = Carbon::parse($validated['end_time'])->format('Y-m-d H:i:s');
         $appointmentDate = Carbon::parse($validated['start_time'])->format('Y-m-d');
 
-        // 1. VALIDAÇÃO DE INDISPONIBILIDADE (BLOQUEIOS)
         $isBlocked = ScheduleBlock::where('professional_id', $professionalId)
             ->where(function($query) use ($startTime, $endTime) {
                 $query->where('start_time', '<', $endTime)
@@ -128,9 +138,8 @@ class AppointmentController extends Controller
             ]);
         }
 
-        // 2. VALIDAÇÃO DE CHOQUE DE HORÁRIOS (HORÁRIOS CANCELADOS SÃO LIBERADOS)
         $hasAppointmentConflict = Appointment::where('professional_id', $professionalId)
-            ->where('status', '!=', 'cancelado') // Filtro de liberação para novas marcações
+            ->where('status', '!=', 'cancelado')
             ->where(function($query) use ($startTime, $endTime) {
                 $query->where('start_time', '<', $endTime)
                       ->where('end_time', '>', $startTime);
@@ -158,18 +167,28 @@ class AppointmentController extends Controller
     public function storeBlock(Request $request)
     {
         $user = auth()->user();
-        $professionalId = $request->professional_id;
 
-        if (!$user->hasRole(['admin', 'secretaria'])) {
-            $professional = Professional::where('user_id', $user->id)->firstOrFail();
-            $professionalId = $professional->id;
-        }
-
-        $validated = $request->validate([
+        $rules = [
             'start_time' => 'required|date',
             'end_time' => 'required|date|after:start_time',
             'reason' => 'required|string|max:255'
+        ];
+
+        if ($user->hasRole(['admin', 'secretaria'])) {
+            $rules['professional_id'] = 'required|exists:professionals,id';
+        }
+
+        $validated = $request->validate($rules, [
+            'professional_id.required' => 'É obrigatório selecionar um profissional de saúde.',
+            'professional_id.exists' => 'O usuário selecionado não é um profissional de saúde válido.'
         ]);
+
+        if ($user->hasRole(['admin', 'secretaria'])) {
+            $professionalId = $validated['professional_id'];
+        } else {
+            $professional = Professional::where('user_id', $user->id)->firstOrFail();
+            $professionalId = $professional->id;
+        }
 
         ScheduleBlock::create([
             'professional_id' => $professionalId,

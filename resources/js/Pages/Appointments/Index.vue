@@ -181,7 +181,8 @@ const calendarOptions = ref({
                 {{ $page.props.flash.success }}
             </div>
 
-            <div v-if="Object.keys($page.props.errors).length > 0" class="mb-6 bg-red-50 text-red-700 p-4 rounded-xl border border-red-200 font-bold shadow-sm">
+            <!-- Exibe erros genéricos que não estão mapeados aos inputs específicos -->
+            <div v-if="Object.keys($page.props.errors).length > 0 && !form.hasErrors && !blockForm.hasErrors" class="mb-6 bg-red-50 text-red-700 p-4 rounded-xl border border-red-200 font-bold shadow-sm">
                 <div v-for="(error, index) in $page.props.errors" :key="index">{{ error }}</div>
             </div>
 
@@ -317,6 +318,7 @@ const calendarOptions = ref({
                             :options="patients" 
                             placeholder="Pesquise o paciente pelo nome..." 
                         />
+                        <InputError :message="form.errors.patient_id" class="mt-1" />
                     </div>
 
                     <div v-if="canManageOthers">
@@ -326,22 +328,26 @@ const calendarOptions = ref({
                             :options="professionals" 
                             placeholder="Pesquise o profissional..." 
                         />
+                        <InputError :message="form.errors.professional_id" class="mt-1" />
                     </div>
 
                     <div class="grid grid-cols-2 gap-4">
                         <div>
                             <InputLabel value="Início *" />
                             <TextInput type="datetime-local" class="mt-1 block w-full text-sm" v-model="form.start_time" required />
+                            <InputError :message="form.errors.start_time" class="mt-1" />
                         </div>
                         <div>
                             <InputLabel value="Fim (Automático) *" />
                             <TextInput type="datetime-local" class="mt-1 block w-full text-sm bg-gray-50" v-model="form.end_time" readonly required />
+                            <InputError :message="form.errors.end_time" class="mt-1" />
                         </div>
                     </div>
 
                     <div>
                         <InputLabel value="Notas e Observações" />
                         <textarea v-model="form.notes" rows="2" class="mt-1 block w-full border-gray-300 focus:border-indigo-500 rounded-lg shadow-sm"></textarea>
+                        <InputError :message="form.errors.notes" class="mt-1" />
                     </div>
 
                     <div class="flex items-center justify-end pt-4 border-t gap-3 mt-6">
@@ -365,22 +371,26 @@ const calendarOptions = ref({
                             :options="professionals" 
                             placeholder="Pesquise o membro da equipa..." 
                         />
+                        <InputError :message="blockForm.errors.professional_id" class="mt-1" />
                     </div>
 
                     <div class="grid grid-cols-2 gap-4">
                         <div>
                             <InputLabel value="Início *" />
                             <TextInput type="datetime-local" v-model="blockForm.start_time" class="mt-1 block w-full text-sm" required />
+                            <InputError :message="blockForm.errors.start_time" class="mt-1" />
                         </div>
                         <div>
                             <InputLabel value="Fim *" />
                             <TextInput type="datetime-local" v-model="blockForm.end_time" class="mt-1 block w-full text-sm" required />
+                            <InputError :message="blockForm.errors.end_time" class="mt-1" />
                         </div>
                     </div>
                     
                     <div>
                         <InputLabel value="Motivo / Justificação *" />
                         <TextInput type="text" v-model="blockForm.reason" class="mt-1 block w-full" placeholder="Ex: Almoço, Curso..." required />
+                        <InputError :message="blockForm.errors.reason" class="mt-1" />
                     </div>
 
                     <div class="flex items-center justify-end pt-4 gap-3 mt-4 border-t border-gray-100">
