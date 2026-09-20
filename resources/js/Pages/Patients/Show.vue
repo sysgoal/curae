@@ -427,34 +427,68 @@ const closeAiModal = () => {
                                     </div>
 
                                     <!-- Evolução com Medidas / Sinais Vitais Incorporados -->
+                                    <!-- Evolução com Medidas / Sinais Vitais Incorporados -->
                                     <div v-if="item.item_type === 'evolution'" class="space-y-4">
-                                        <h4 class="font-bold text-blue-900 text-base">Registo de Evolução Clínica</h4>
+                                        <div class="flex justify-between items-start">
+                                            <h4 class="font-bold text-blue-900 text-base">Registo de Evolução Clínica</h4>
+                                            <span v-if="item.professional" class="text-[10px] font-bold text-gray-500 uppercase tracking-wider bg-gray-50 px-2.5 py-1 rounded-md border border-gray-100 shadow-sm">
+                                                Assinatura: {{ item.professional.name }}
+                                            </span>
+                                        </div>
                                         
-                                        <!-- Bloco Dinâmico de Sinais Vitais -->
-                                        <div v-if="item.weight || item.height || item.blood_pressure || item.temperature || item.heart_rate" class="grid grid-cols-2 sm:grid-cols-4 gap-3 bg-white">
-                                            <div v-if="item.weight" class="bg-blue-50/50 p-2.5 rounded-xl border border-blue-100">
-                                                <span class="block text-[10px] text-blue-500 font-bold uppercase tracking-wide">Peso</span>
-                                                <span class="font-bold text-gray-800 text-sm">{{ item.weight }} <span class="text-xs text-gray-500 font-medium">kg</span></span>
+                                        <!-- Bloco Dinâmico e Compacto de Sinais Vitais (Flex Wrap) -->
+                                        <div class="flex flex-wrap gap-2.5 bg-white">
+                                            
+                                            <!-- Biometria -->
+                                            <div v-if="item.weight" class="bg-blue-50/40 px-3 py-1.5 rounded-lg border border-blue-100/50 min-w-[85px]">
+                                                <span class="block text-[9px] text-blue-500 font-bold uppercase tracking-wider">Peso</span>
+                                                <span class="font-bold text-gray-800 text-sm">{{ item.weight }} <span class="text-[10px] text-gray-500 font-medium">kg</span></span>
                                             </div>
-                                            <div v-if="item.height" class="bg-blue-50/50 p-2.5 rounded-xl border border-blue-100">
-                                                <span class="block text-[10px] text-blue-500 font-bold uppercase tracking-wide">Altura</span>
-                                                <span class="font-bold text-gray-800 text-sm">{{ item.height }} <span class="text-xs text-gray-500 font-medium">cm</span></span>
+                                            
+                                            <div v-if="item.height" class="bg-blue-50/40 px-3 py-1.5 rounded-lg border border-blue-100/50 min-w-[85px]">
+                                                <span class="block text-[9px] text-blue-500 font-bold uppercase tracking-wider">Altura</span>
+                                                <span class="font-bold text-gray-800 text-sm">{{ item.height }} <span class="text-[10px] text-gray-500 font-medium">m</span></span>
                                             </div>
-                                            <div v-if="item.blood_pressure" class="bg-blue-50/50 p-2.5 rounded-xl border border-blue-100">
-                                                <span class="block text-[10px] text-blue-500 font-bold uppercase tracking-wide">Pressão Art.</span>
-                                                <span class="font-bold text-gray-800 text-sm">{{ item.blood_pressure }} <span class="text-xs text-gray-500 font-medium">mmHg</span></span>
+
+                                            <div v-if="item.bmi" class="bg-blue-50/40 px-3 py-1.5 rounded-lg border border-blue-100/50 min-w-[85px]">
+                                                <span class="block text-[9px] text-blue-500 font-bold uppercase tracking-wider">IMC</span>
+                                                <span class="font-bold text-gray-800 text-sm">{{ item.bmi }}</span>
                                             </div>
-                                            <div v-if="item.temperature" class="bg-blue-50/50 p-2.5 rounded-xl border border-blue-100">
-                                                <span class="block text-[10px] text-blue-500 font-bold uppercase tracking-wide">Temperatura</span>
-                                                <span class="font-bold text-gray-800 text-sm">{{ item.temperature }} <span class="text-xs text-gray-500 font-medium">°C</span></span>
+
+                                            <!-- Sinais Vitais (Coração/Respiração) -->
+                                            <div v-if="item.systolic_bp || item.diastolic_bp" class="bg-red-50/40 px-3 py-1.5 rounded-lg border border-red-100/50 min-w-[85px]">
+                                                <span class="block text-[9px] text-red-500 font-bold uppercase tracking-wider">Pressão Art.</span>
+                                                <span class="font-bold text-gray-800 text-sm">{{ item.systolic_bp || '-' }}/{{ item.diastolic_bp || '-' }} <span class="text-[10px] text-gray-500 font-medium">mmHg</span></span>
                                             </div>
-                                            <div v-if="item.heart_rate" class="bg-blue-50/50 p-2.5 rounded-xl border border-blue-100">
-                                                <span class="block text-[10px] text-blue-500 font-bold uppercase tracking-wide">Freq. Cardíaca</span>
-                                                <span class="font-bold text-gray-800 text-sm">{{ item.heart_rate }} <span class="text-xs text-gray-500 font-medium">bpm</span></span>
+
+                                            <div v-if="item.heart_rate" class="bg-red-50/40 px-3 py-1.5 rounded-lg border border-red-100/50 min-w-[85px]">
+                                                <span class="block text-[9px] text-red-500 font-bold uppercase tracking-wider">Freq. Card.</span>
+                                                <span class="font-bold text-gray-800 text-sm">{{ item.heart_rate }} <span class="text-[10px] text-gray-500 font-medium">bpm</span></span>
+                                            </div>
+
+                                            <div v-if="item.respiratory_rate" class="bg-emerald-50/40 px-3 py-1.5 rounded-lg border border-emerald-100/50 min-w-[85px]">
+                                                <span class="block text-[9px] text-emerald-600 font-bold uppercase tracking-wider">Freq. Resp.</span>
+                                                <span class="font-bold text-gray-800 text-sm">{{ item.respiratory_rate }} <span class="text-[10px] text-gray-500 font-medium">irpm</span></span>
+                                            </div>
+
+                                            <div v-if="item.oxygen_saturation" class="bg-emerald-50/40 px-3 py-1.5 rounded-lg border border-emerald-100/50 min-w-[85px]">
+                                                <span class="block text-[9px] text-emerald-600 font-bold uppercase tracking-wider">Saturação O2</span>
+                                                <span class="font-bold text-gray-800 text-sm">{{ item.oxygen_saturation }} <span class="text-[10px] text-gray-500 font-medium">%</span></span>
+                                            </div>
+
+                                            <!-- Outras Medidas -->
+                                            <div v-if="item.temperature" class="bg-amber-50/40 px-3 py-1.5 rounded-lg border border-amber-100/50 min-w-[85px]">
+                                                <span class="block text-[9px] text-amber-600 font-bold uppercase tracking-wider">Temperatura</span>
+                                                <span class="font-bold text-gray-800 text-sm">{{ item.temperature }} <span class="text-[10px] text-gray-500 font-medium">°C</span></span>
+                                            </div>
+
+                                            <div v-if="item.blood_glucose" class="bg-purple-50/40 px-3 py-1.5 rounded-lg border border-purple-100/50 min-w-[85px]">
+                                                <span class="block text-[9px] text-purple-500 font-bold uppercase tracking-wider">Glicemia</span>
+                                                <span class="font-bold text-gray-800 text-sm">{{ item.blood_glucose }} <span class="text-[10px] text-gray-500 font-medium">mg/dL</span></span>
                                             </div>
                                         </div>
 
-                                        <div class="p-4 bg-gray-50 rounded-2xl border border-gray-100 text-sm text-gray-700 whitespace-pre-wrap leading-relaxed">
+                                        <div class="p-4 bg-gray-50/80 rounded-2xl border border-gray-100 text-sm text-gray-700 whitespace-pre-wrap leading-relaxed shadow-inner">
                                             <span class="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-2">Observações / Conduta</span>
                                             {{ item.clinical_notes }}
                                         </div>
