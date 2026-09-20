@@ -21,4 +21,38 @@ class Patient extends Model
         'date_of_birth' => 'date',
         'last_anamnesis_at' => 'datetime',
     ];
+
+    public function anamneses()
+    {
+        return $this->hasMany(Anamnesis::class);
+    }
+
+    /**
+     * Um paciente tem muitas Evoluções.
+     */
+    public function evolutions()
+    {
+        return $this->hasMany(Evolution::class);
+    }
+
+    /**
+     * Um paciente tem muitas Receitas / Prescrições.
+     */
+    public function prescriptions()
+    {
+        return $this->hasMany(Prescription::class);
+    }
+
+    /**
+     * Um paciente tem muitos Exames/Ficheiros anexados.
+     */
+    public function files()
+    {
+        return $this->hasMany(PatientFile::class);
+    }
+
+    public function examRequests()
+    {
+        return $this->hasMany(ExamRequest::class);
+    }
 }

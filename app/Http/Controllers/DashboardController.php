@@ -2,36 +2,45 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\Appointment;
 use App\Models\Patient;
-use App\Models\Professional; // <-- Importação do novo Model
+use App\Models\Appointment;
+use App\Models\Professional;
 use Illuminate\Http\Request;
-use Carbon\Carbon;
 use Inertia\Inertia;
 
 class DashboardController extends Controller
 {
     public function index()
     {
-        $today = Carbon::today()->format('Y-m-d');
+        $user = auth()->user();
+        $stats = [];
 
-        $stats = [
-            'total_patients' => Patient::count(),
-            'total_professionals' => Professional::count(), // <-- Estatística para o administrador
-            'appointments_today' => Appointment::where('appointment_date', $today)->count(),
-            'completed_today' => Appointment::where('appointment_date', $today)->where('status', 'finalizado')->count(),
-        ];
-
-        $nextAppointments = Appointment::with(['patient', 'professional'])
-            ->where('appointment_date', $today)
-            ->whereNotIn('status', ['cancelado', 'finalizado'])
-            ->orderBy('start_time', 'asc')
-            ->take(5)
-            ->get();
+        if ($user->hasRole('admin')) {
+            $stats = [
+                'total_patients' => Patient::count(),
+                'total_professionals' => Professional::count(),
+                'pending_appointments' => Appointment::where('status', 'scheduled')->count(),
+            ];
+        } elseif ($user->hasRole('secretaria')) {
+            $stats = [
+                'today_appointments' => Appointment::whereDate('appointment_date', today())->count(),
+                'total_patients' => Patient::count(),
+            ];
+        } else {
+            // Médicos, Enfermeiras, Nutricionistas e Fisioterapeutas
+            $professional = Professional::where('user_id', $user->id)->first();
+            $stats = [
+                'my_appointments_today' => Appointment::where('professional_id', $professional?->id ?? 0)
+                    ->whereDate('appointment_date', today())
+                    ->count(),
+                'total_linked_patients' => Patient::whereHas('anamneses', function ($query) use ($professional) {
+                    $query->where('professional_id', $professional?->id ?? 0);
+                })->count(),
+            ];
+        }
 
         return Inertia::render('Dashboard', [
-            'stats' => $stats,
-            'nextAppointments' => $nextAppointments,
+            'stats' => $stats
         ]);
     }
 }

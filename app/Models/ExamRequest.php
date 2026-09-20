@@ -5,16 +5,20 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 
-class Prescription extends Model
+class ExamRequest extends Model
 {
     use HasFactory;
 
     protected $fillable = [
-        'patient_id', 'professional_id', 'medications', 'notes', 'verification_code'
+        'patient_id', 
+        'professional_id', 
+        'exams', 
+        'clinical_indication', 
+        'notes'
     ];
 
     protected $casts = [
-        'medications' => 'array',
+        'exams' => 'array',
     ];
 
     public function patient()
@@ -22,9 +26,8 @@ class Prescription extends Model
         return $this->belongsTo(Patient::class);
     }
 
-    // Garanra que esta função aponta para o Professional::class
     public function professional()
     {
-        return $this->belongsTo(Professional::class, 'professional_id');
+        return $this->belongsTo(Professional::class);
     }
 }

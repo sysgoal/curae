@@ -3,19 +3,15 @@
 namespace App\Http\Controllers;
 
 use App\Models\Patient;
-use App\Models\Anamnesis;
-use App\Models\Evolution;
-use App\Models\Prescription;
+use App\Models\Appointment;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
-use App\Models\PatientFile;
 
 class PatientController extends Controller
 {
     public function index()
     {
-        $patients = Patient::orderBy('name')->paginate(10);
-
+        $patients = Patient::orderBy('name')->get();
         return Inertia::render('Patients/Index', [
             'patients' => $patients
         ]);
@@ -31,38 +27,37 @@ class PatientController extends Controller
         $validated = $request->validate([
             'name' => 'required|string|max:255',
             'cpf' => 'required|string|max:14|unique:patients,cpf',
-            'date_of_birth' => 'required|date',
             'phone' => 'nullable|string|max:20',
-            'email' => 'nullable|email|max:255|unique:patients,email',
-            'gender' => 'nullable|string|in:M,F,Outro,Prefere não informar',
-        ], [
-            'cpf.unique' => 'Este CPF já está cadastrado no sistema.',
-            'email.unique' => 'Este e-mail já está em uso.',
+            'email' => 'nullable|string|email|max:255',
+            'date_of_birth' => 'required|date',
         ]);
 
         Patient::create($validated);
 
-        return redirect()->route('patients.index')->with('success', 'Paciente cadastrado com sucesso!');
+        return redirect()->route('patients.index')
+            ->with('success', 'Paciente cadastrado com sucesso!');
     }
 
-   public function show(Patient $patient)
+    public function show(Patient $patient)
     {
-        // Usamos o caminho completo (\App\Models\...) por precaução
-        $anamneses = \App\Models\Anamnesis::where('patient_id', $patient->id)->latest()->get();
-        $evolutions = \App\Models\Evolution::where('patient_id', $patient->id)->latest()->get();
-        
-        // Mantive a versão sem 'with(medications)' baseada na sua última mensagem
-        $prescriptions = \App\Models\Prescription::where('patient_id', $patient->id)->latest()->get();
-        
-        // A linha que estava a causar o erro, agora com o caminho completo da classe
-        $files = \App\Models\PatientFile::where('patient_id', $patient->id)->latest()->get();
+        // Procura a data da anamnese mais recente deste paciente
+        $lastAnamnesis = $patient->anamneses()->latest()->first();
+
+        // Procura o agendamento mais recente que já tenha sido realizado ou agendado
+        $lastAppointment = Appointment::where('patient_id', $patient->id)
+            ->orderBy('appointment_date', 'desc')
+            ->first();
 
         return Inertia::render('Patients/Show', [
             'patient' => $patient,
-            'anamneses' => $anamneses,
-            'evolutions' => $evolutions,
-            'prescriptions' => $prescriptions,
-            'files' => $files,
+            'anamneses' => $patient->anamneses()->with('professional')->get(),
+            'evolutions' => $patient->evolutions()->get(),
+            'prescriptions' => $patient->prescriptions()->get(),
+            'examRequests' => $patient->examRequests()->with('professional')->latest()->get(),
+            'files' => $patient->files()->get(),
+            // Envia as datas formatadas ou nulas para o frontend
+            'last_anamnesis_date' => $lastAnamnesis ? $lastAnamnesis->created_at->toISOString() : null,
+            'last_appointment_date' => $lastAppointment ? $lastAppointment->appointment_date : null,
         ]);
     }
 
@@ -78,24 +73,37 @@ class PatientController extends Controller
         $validated = $request->validate([
             'name' => 'required|string|max:255',
             'cpf' => 'required|string|max:14|unique:patients,cpf,' . $patient->id,
-            'date_of_birth' => 'required|date',
             'phone' => 'nullable|string|max:20',
-            'email' => 'nullable|email|max:255|unique:patients,email,' . $patient->id,
-            'gender' => 'nullable|string|in:M,F,Outro,Prefere não informar',
-        ], [
-            'cpf.unique' => 'Este CPF já está cadastrado em outro paciente.',
-            'email.unique' => 'Este e-mail já está em uso por outro paciente.',
+            'email' => 'nullable|string|email|max:255',
+            'date_of_birth' => 'required|date',
         ]);
 
         $patient->update($validated);
 
-        return redirect()->route('patients.index')->with('success', 'Cadastro atualizado com sucesso!');
+        return redirect()->route('patients.show', $patient->id)
+            ->with('success', 'Dados cadastrais atualizados!');
     }
 
     public function destroy(Patient $patient)
     {
         $patient->delete();
+        return redirect()->route('patients.index')
+            ->with('success', 'Paciente removido do sistema.');
+    }
 
-        return redirect()->route('patients.index')->with('success', 'Paciente removido com sucesso!');
+    /**
+     * Gera uma visualização resumida e cronológica de todo o histórico do paciente.
+     */
+    public function history(Patient $patient)
+    {
+        return Inertia::render('Patients/History', [
+            'patient' => $patient,
+            // Carregamos os dados incluindo o profissional responsável por cada ato
+            'anamneses' => $patient->anamneses()->with('professional')->get(),
+            'evolutions' => $patient->evolutions()->with('professional')->get(),
+            'prescriptions' => $patient->prescriptions()->with('professional')->get(),
+            'examRequests' => $patient->examRequests()->with('professional')->get(),
+            'files' => $patient->files()->get(),
+        ]);
     }
 }

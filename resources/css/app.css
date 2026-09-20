@@ -1,3 +1,60 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+/* ==============================================================
+   FORÇAR O FULLCALENDAR A IGNORAR O RESET DO TAILWIND CSS
+   ============================================================== */
+.fc {
+    font-family: inherit !important;
+    z-index: 0 !important;
+}
+/* Forçar botões a aparecerem */
+.fc .fc-button-primary {
+    background-color: #4f46e5 !important;
+    border-color: #4f46e5 !important;
+    text-transform: capitalize !important;
+    border-radius: 0.5rem !important;
+    font-weight: 600 !important;
+    padding: 0.5rem 1rem !important;
+}
+.fc .fc-button-primary:hover {
+    background-color: #4338ca !important;
+}
+.fc .fc-today-button {
+    background-color: #f3f4f6 !important;
+    color: #374151 !important;
+    border-color: #d1d5db !important;
+}
+/* Forçar a grelha e as tabelas a aparecerem */
+.fc-theme-standard td, 
+.fc-theme-standard th, 
+.fc-theme-standard .fc-scrollgrid {
+    border: 1px solid #e5e7eb !important;
+}
+.fc-theme-standard .fc-scrollgrid {
+    border-radius: 0.5rem !important;
+    overflow: hidden !important;
+}
+.fc-scrollgrid-sync-table {
+    width: 100% !important;
+    height: 100% !important;
+}
+/* Cores do texto */
+.fc-col-header-cell-cushion, 
+.fc-daygrid-day-number,
+.fc-timegrid-slot-label-cushion {
+    text-decoration: none !important;
+    color: #374151 !important;
+    font-weight: bold !important;
+}
+/* Eventos e Consultas */
+.fc-event {
+    border-radius: 4px !important;
+    padding: 3px 5px !important;
+    font-size: 0.75rem !important;
+    border: none !important;
+    color: white !important;
+}
+.fc-timegrid-event .fc-event-main {
+    padding: 2px 4px !important;
+}

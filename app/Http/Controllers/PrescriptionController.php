@@ -2,13 +2,13 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\Prescription;
 use App\Models\Patient;
+use App\Models\Prescription;
 use App\Models\Professional;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
 use Inertia\Inertia;
-use Barryvdh\DomPDF\Facade\Pdf; 
+use Barryvdh\DomPDF\Facade\Pdf; // <-- Importação do pacote de PDF
 
 class PrescriptionController extends Controller
 {
@@ -25,38 +25,49 @@ class PrescriptionController extends Controller
     {
         $validated = $request->validate([
             'patient_id' => 'required|exists:patients,id',
+            'medications' => 'required|array|min:1',
+            'medications.*.name' => 'required|string',
+            'medications.*.dosage' => 'required|string',
+            'medications.*.instructions' => 'required|string',
             'notes' => 'nullable|string',
-            'medications' => 'nullable|array',
         ]);
 
         $professional = Professional::where('user_id', auth()->id())->first();
 
         if (!$professional) {
-            return back()->withErrors(['error' => 'Acesso negado: O seu utilizador não possui um perfil de profissional de saúde vinculado.']);
+            return back()->withErrors(['error' => 'Acesso bloqueado: Não possui um registo profissional associado para prescrever.']);
         }
 
-        $validated['professional_id'] = $professional->id;
-        
-        // Gera um código verificador único para a receita
-        $validated['verification_code'] = strtoupper(Str::random(8));
+        $verificationCode = strtoupper(Str::random(10));
 
-        Prescription::create($validated);
+        $prescription = Prescription::create([
+            'patient_id' => $validated['patient_id'],
+            'professional_id' => $professional->id,
+            'medications' => $validated['medications'],
+            'notes' => $validated['notes'],
+            'verification_code' => $verificationCode,
+        ]);
 
-        return redirect()->route('patients.show', $request->patient_id)
-            ->with('success', 'Receita médica gerada e validada com sucesso!');
+        // Redireciona de volta para o prontuário e injeta a rota do PDF na sessão (Flash data)
+        return redirect()->route('patients.show', $validated['patient_id'])
+            ->with('success', 'Receita médica gerada e autenticada com sucesso!')
+            ->with('open_prescription_pdf', route('prescriptions.pdf', $prescription->id));
     }
 
-     public function generatePdf(Prescription $prescription)
-
+    /**
+     * Gera e exibe o arquivo PDF da receita médica.
+     */
+   /**
+     * Gera e exibe o arquivo PDF da receita médica.
+     */
+    public function generatePdf(Prescription $prescription)
     {
-        // Carrega os dados do paciente para podermos usar no PDF
-        $prescription->load('patient');
-
-        // Renderiza a vista Blade que vamos criar no passo seguinte
+        // Alterado aqui: Removemos o 'professional.user'
+        $prescription->load(['patient', 'professional']);
+        
         $pdf = Pdf::loadView('pdf.prescription', compact('prescription'));
-
-        // Configura para abrir no navegador em vez de descarregar logo
-        return $pdf->stream('receita_' . Str::slug($prescription->patient->name) . '.pdf');
+        $pdf->setPaper('a4', 'portrait');
+        
+        return $pdf->stream('receita-' . $prescription->verification_code . '.pdf');
     }
-
 }

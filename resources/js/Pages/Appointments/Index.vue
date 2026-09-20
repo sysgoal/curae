@@ -1,270 +1,400 @@
 <script setup>
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
-import InputLabel from '@/Components/InputLabel.vue';
-import TextInput from '@/Components/TextInput.vue';
-import PrimaryButton from '@/Components/PrimaryButton.vue';
+import { Head, Link, useForm, usePage, router } from '@inertiajs/vue3';
+import { ref, computed, watch } from 'vue';
 import Modal from '@/Components/Modal.vue';
-import SecondaryButton from '@/Components/SecondaryButton.vue';
-import { Head, useForm, router } from '@inertiajs/vue3';
-import { ref, computed } from 'vue';
+import PrimaryButton from '@/Components/PrimaryButton.vue';
+import TextInput from '@/Components/TextInput.vue';
+import InputLabel from '@/Components/InputLabel.vue';
+import InputError from '@/Components/InputError.vue';
+
+// Importações do FullCalendar
+import FullCalendar from '@fullcalendar/vue3';
+import dayGridPlugin from '@fullcalendar/daygrid';
+import timeGridPlugin from '@fullcalendar/timegrid';
+import interactionPlugin from '@fullcalendar/interaction';
 
 const props = defineProps({
     appointments: Array,
+    scheduleBlocks: Array,
+    professionals: Array,
     patients: Array,
-    professionals: Array // Recebe a lista de profissionais do Controller
+    filters: Object
 });
 
-const selectedDate = ref(new Date().toISOString().substring(0, 10));
+const page = usePage();
+// Começamos com a aba do calendário aberta por padrão!
+const activeTab = ref('calendar'); 
 
+const canManageOthers = computed(() => {
+    const roles = page.props.auth?.roles || [];
+    return roles.includes('admin') || roles.includes('secretaria');
+});
+
+const selectedFilterProfessional = ref(props.filters?.professional_id || '');
+const filterAppointments = () => {
+    router.get(route('appointments.index'), { professional_id: selectedFilterProfessional.value }, { preserveState: true });
+};
+
+// ==========================================
+// LÓGICA DE CONSULTAS E AUTOMAÇÃO
+// ==========================================
+const showingCreateModal = ref(false);
 const form = useForm({
     patient_id: '',
-    professional_id: '', // Novo campo adicionado
-    appointment_date: selectedDate.value,
+    professional_id: canManageOthers.value ? '' : (props.professionals.length > 0 ? props.professionals[0].id : ''),
     start_time: '',
     end_time: '',
-    type: 'Consulta',
+    status: 'agendado',
     notes: ''
 });
 
-const showingCancelModal = ref(false);
-const appointmentToCancel = ref(null);
-const cancellationReason = ref('');
-
-const dailyAppointments = computed(() => {
-    return props.appointments.filter(app => {
-        if (!app.appointment_date) return false;
-        const appDateStr = app.appointment_date.substring(0, 10);
-        return appDateStr === selectedDate.value;
-    });
+// Watch corrigido para não quebrar a string ISO do Date
+watch(() => form.start_time, (newStart) => {
+    if (newStart) {
+        const startDate = new Date(newStart);
+        if (isNaN(startDate.getTime())) return;
+        
+        const endDate = new Date(startDate.getTime() + 30 * 60000);
+        
+        const year = endDate.getFullYear();
+        const month = String(endDate.getMonth() + 1).padStart(2, '0');
+        const day = String(endDate.getDate()).padStart(2, '0');
+        const hours = String(endDate.getHours()).padStart(2, '0');
+        const minutes = String(endDate.getMinutes()).padStart(2, '0');
+        
+        form.end_time = `${year}-${month}-${day}T${hours}:${minutes}`;
+    }
 });
 
-const handleStatusChange = (id, newStatus) => {
-    if (newStatus === 'cancelado') {
-        appointmentToCancel.value = id;
-        cancellationReason.value = '';
-        showingCancelModal.value = true;
-    } else {
-        router.patch(route('appointments.updateStatus', id), { status: newStatus }, {
-            preserveScroll: true,
-            onError: (errors) => alert('Erro: ' + Object.values(errors).join('\n'))
-        });
-    }
+const openCreateModal = () => {
+    form.clearErrors();
+    form.reset();
+    if (!canManageOthers.value && props.professionals.length > 0) form.professional_id = props.professionals[0].id;
+    showingCreateModal.value = true;
 };
 
-const confirmCancellation = () => {
-    if (!cancellationReason.value.trim()) {
-        alert('Por favor, informe o motivo do cancelamento.');
-        return;
-    }
-    router.patch(route('appointments.updateStatus', appointmentToCancel.value), {
-        status: 'cancelado',
-        cancellation_reason: cancellationReason.value
-    }, {
-        preserveScroll: true,
-        onSuccess: () => {
-            showingCancelModal.value = false;
-            appointmentToCancel.value = null;
-        },
-        onError: (errors) => alert('Erro: ' + Object.values(errors).join('\n'))
+const submitAppointment = () => {
+    form.post(route('appointments.store'), {
+        onSuccess: () => showingCreateModal.value = false
     });
 };
 
-const deleteAppointment = (id) => {
-    if (confirm('Tem certeza que deseja remover este agendamento do histórico?')) {
-        router.delete(route('appointments.destroy', id), {
-            preserveScroll: true
-        });
-    }
+const updateStatus = (id, newStatus) => router.patch(route('appointments.updateStatus', id), { status: newStatus }, { preserveScroll: true });
+const deleteAppointment = (id) => { if (confirm('Tem a certeza que deseja remover este agendamento permanentemente?')) router.delete(route('appointments.destroy', id)); };
+
+// ==========================================
+// LÓGICA DE BLOQUEIOS (INDISPONIBILIDADES)
+// ==========================================
+const showingBlockModal = ref(false);
+const blockForm = useForm({
+    professional_id: canManageOthers.value ? '' : (props.professionals.length > 0 ? props.professionals[0].id : ''),
+    start_time: '',
+    end_time: '',
+    reason: ''
+});
+
+const openBlockModal = () => {
+    blockForm.clearErrors();
+    blockForm.reset();
+    if (!canManageOthers.value && props.professionals.length > 0) blockForm.professional_id = props.professionals[0].id;
+    showingBlockModal.value = true;
 };
 
-const submit = () => {
-    form.post(route('appointments.store'), {
-        onSuccess: () => {
-            form.reset('patient_id', 'start_time', 'end_time', 'type', 'notes');
-            // Mantemos o professional_id preenchido caso a secretária queira marcar outro para o mesmo médico
+const submitBlock = () => {
+    blockForm.post(route('schedule-blocks.store'), {
+        onSuccess: () => showingBlockModal.value = false
+    });
+};
+
+const deleteBlock = (id) => { if (confirm('Remover este bloqueio e liberar a agenda?')) router.delete(route('schedule-blocks.destroy', id)); };
+
+// ==========================================
+// LÓGICA DO FULLCALENDAR
+// ==========================================
+const calendarEvents = computed(() => {
+    const events = [];
+    
+    props.appointments.forEach(appt => {
+        if (appt.status !== 'cancelado') {
+            events.push({
+                id: 'appt-' + appt.id,
+                title: `${appt.patient?.name} (${appt.status}) - [${appt.professional?.name}]`,
+                start: appt.start_time,
+                end: appt.end_time,
+                backgroundColor: appt.status === 'concluido' ? '#10B981' : '#4F46E5', 
+                borderColor: 'transparent',
+            });
         }
     });
-};
 
-const statusMeta = (status) => {
-    if (!status) return { label: 'Indefinido', class: 'bg-gray-100 text-gray-800 border-gray-200' };
-    const safeStatus = String(status).toLowerCase().trim();
-    const map = {
-        agendado: { label: 'Agendado', class: 'bg-blue-100 text-blue-800 border-blue-200' },
-        confirmado: { label: 'Confirmado', class: 'bg-indigo-100 text-indigo-800 border-indigo-200' },
-        espera: { label: 'Em Espera', class: 'bg-amber-100 text-amber-800 border-amber-200' },
-        atendimento: { label: 'Em Atendimento', class: 'bg-purple-100 text-purple-800 border-purple-200' },
-        finalizado: { label: 'Finalizado', class: 'bg-emerald-100 text-emerald-800 border-emerald-200' },
-        falta: { label: 'Falta', class: 'bg-orange-100 text-orange-800 border-orange-200' },
-        cancelado: { label: 'Cancelado', class: 'bg-red-100 text-red-800 border-red-200' },
-    };
-    return map[safeStatus] || { label: status, class: 'bg-gray-100 text-gray-800 border-gray-200' };
-};
+    props.scheduleBlocks.forEach(block => {
+        events.push({
+            id: 'block-' + block.id,
+            title: '🚫 Bloqueado: ' + block.reason,
+            start: block.start_time,
+            end: block.end_time,
+            backgroundColor: '#EF4444', 
+            borderColor: 'transparent',
+        });
+    });
 
-const formatTime = (timeStr) => {
-    if (!timeStr) return '';
-    return timeStr.substring(0, 5);
-};
+    return events;
+});
+
+const calendarOptions = ref({
+    plugins: [ dayGridPlugin, timeGridPlugin, interactionPlugin ],
+    initialView: 'timeGridWeek',
+    headerToolbar: {
+        left: 'prev,next today',
+        center: 'title',
+        right: 'dayGridMonth,timeGridWeek,timeGridDay'
+    },
+    locale: 'pt-br',
+    buttonText: {
+        today: 'Hoje',
+        month: 'Mês',
+        week: 'Semana',
+        day: 'Dia'
+    },
+    events: calendarEvents,
+    allDaySlot: false,
+    eventDisplay: 'block',     // Força os eventos a terem fundo colorido na visão de Mês
+    displayEventTime: true,    
+    
+    // AJUSTES PARA TELAS MENORES (14")
+    slotMinTime: '07:00:00',
+    slotMaxTime: '19:00:00',
+    aspectRatio: 2.0,
+    height: 600,
+    expandRows: true,
+    stickyHeaderDates: true,
+    
+    eventClick: (info) => {
+        alert('Detalhes: ' + info.event.title);
+    }
+});
 </script>
 
 <template>
-    <Head title="Agenda de Consultas" />
-
+    <Head title="Agenda e Horários" />
     <AuthenticatedLayout>
-        <template #header>
-            <h2 class="font-semibold text-xl text-gray-800 leading-tight">
-                Agenda e Marcações
-            </h2>
-        </template>
+        <div class="py-12 max-w-7xl mx-auto sm:px-6 lg:px-8">
+            
+            <div v-if="$page.props.flash?.success" class="mb-6 bg-green-50 text-green-700 p-4 rounded-xl border border-green-200 font-bold shadow-sm">
+                {{ $page.props.flash.success }}
+            </div>
 
-        <div class="py-12">
-            <div class="max-w-7xl mx-auto sm:px-6 lg:px-8">
-                <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                    
-                    <div class="lg:col-span-1 bg-white p-6 shadow-sm sm:rounded-lg h-fit">
-                        <h3 class="text-lg font-bold text-gray-900 border-b pb-2 mb-4">Marcar Consulta</h3>
-                        
-                        <form @submit.prevent="submit" class="space-y-4 text-sm">
-                            
-                            <div>
-                                <InputLabel value="Profissional *" />
-                                <select v-model="form.professional_id" class="mt-1 block w-full border-gray-300 focus:border-indigo-500 focus:ring-indigo-500 rounded-md shadow-sm bg-indigo-50" required>
-                                    <option value="" disabled>-- Quem vai atender? --</option>
-                                    <option v-for="prof in professionals" :key="prof.id" :value="prof.id">
-                                        {{ prof.name }} ({{ prof.specialty || prof.profession }})
-                                    </option>
-                                </select>
-                            </div>
+            <div v-if="Object.keys($page.props.errors).length > 0" class="mb-6 bg-red-50 text-red-700 p-4 rounded-xl border border-red-200 font-bold shadow-sm">
+                <div v-for="(error, index) in $page.props.errors" :key="index">{{ error }}</div>
+            </div>
 
-                            <div>
-                                <InputLabel value="Paciente *" />
-                                <select v-model="form.patient_id" class="mt-1 block w-full border-gray-300 focus:border-indigo-500 focus:ring-indigo-500 rounded-md shadow-sm" required>
-                                    <option value="">-- Escolha o Paciente --</option>
-                                    <option v-for="patient in patients" :key="patient.id" :value="patient.id">
-                                        {{ patient.name }} (CPF: {{ patient.cpf }})
-                                    </option>
-                                </select>
-                            </div>
-
-                            <div class="grid grid-cols-2 gap-4">
-                                <div>
-                                    <InputLabel value="Início *" />
-                                    <TextInput type="time" v-model="form.start_time" class="mt-1 block w-full text-xs" required />
-                                </div>
-                                <div>
-                                    <InputLabel value="Término *" />
-                                    <TextInput type="time" v-model="form.end_time" class="mt-1 block w-full text-xs" required />
-                                </div>
-                            </div>
-
-                            <div>
-                                <InputLabel value="Tipo *" />
-                                <select v-model="form.type" class="mt-1 block w-full border-gray-300 focus:border-indigo-500 focus:ring-indigo-500 rounded-md shadow-sm" required>
-                                    <option value="Consulta">Consulta</option>
-                                    <option value="Retorno">Retorno</option>
-                                    <option value="Procedimento">Procedimento</option>
-                                    <option value="Exame">Exame</option>
-                                </select>
-                            </div>
-
-                            <div>
-                                <InputLabel value="Observações da Secretária" />
-                                <textarea v-model="form.notes" rows="2" class="mt-1 block w-full border-gray-300 focus:border-indigo-500 focus:ring-indigo-500 rounded-md shadow-sm" placeholder="Opcional..."></textarea>
-                            </div>
-
-                            <PrimaryButton :disabled="form.processing" class="w-full justify-center py-3">
-                                Agendar Horário
-                            </PrimaryButton>
-                        </form>
+            <div class="bg-white overflow-hidden shadow-sm sm:rounded-2xl border border-gray-100">
+                
+                <div class="p-6 border-b border-gray-100 flex flex-col sm:flex-row items-center justify-between gap-4 bg-white">
+                    <div>
+                        <h3 class="text-lg font-black text-gray-900">Gestão de Agenda</h3>
+                        <p class="text-xs text-gray-500 mt-0.5">Controlo de marcações e disponibilidade clínica.</p>
                     </div>
 
-                    <div class="lg:col-span-2 space-y-4">
-                        
-                        <div class="bg-white p-4 shadow-sm sm:rounded-lg flex items-center justify-between">
-                            <div class="flex items-center gap-3">
-                                <span class="font-bold text-gray-700 text-sm">Navegar pelo Dia:</span>
-                                <input type="date" v-model="selectedDate" @change="form.appointment_date = selectedDate" class="border-gray-300 focus:border-blue-500 focus:ring-blue-500 rounded-md text-sm p-1.5" />
-                            </div>
-                            <span class="text-xs text-gray-500 font-medium">Total do dia: {{ dailyAppointments.length }}</span>
-                        </div>
-
-                        <div class="bg-white p-6 shadow-sm sm:rounded-lg min-h-[55vh]">
-                            <div v-if="$page.props.flash && $page.props.flash.success" class="mb-4 bg-green-100 border border-green-400 text-green-700 px-4 py-2 rounded text-sm transition-all">
-                                {{ $page.props.flash.success }}
-                            </div>
-
-                            <div v-if="dailyAppointments.length > 0" class="space-y-4">
-                                <div v-for="app in dailyAppointments" :key="app.id" class="border border-gray-200 rounded-lg p-4 flex flex-wrap items-center justify-between bg-gray-50 hover:bg-white hover:shadow transition-all border-l-4 border-l-indigo-500">
-                                    
-                                    <div class="flex items-center gap-4">
-                                        <div class="text-center">
-                                            <div class="text-base font-mono font-bold text-indigo-600 bg-indigo-50 border border-indigo-100 px-2.5 py-1 rounded">
-                                                {{ formatTime(app.start_time) }}
-                                            </div>
-                                        </div>
-                                        <div>
-                                            <div class="flex items-center gap-2">
-                                                <h4 class="font-bold text-gray-900 text-base">{{ app.patient?.name || 'Paciente Removido' }}</h4>
-                                                <span class="text-[10px] font-bold uppercase bg-gray-200 text-gray-600 px-1.5 py-0.5 rounded tracking-wide">{{ app.type }}</span>
-                                            </div>
-                                            <div class="text-xs font-semibold text-indigo-700 mt-1 flex items-center gap-1">
-                                                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="w-3.5 h-3.5">
-                                                    <path stroke-linecap="round" stroke-linejoin="round" d="M15.75 6a3.75 3.75 0 1 1-7.5 0 3.75 3.75 0 0 1 7.5 0ZM4.501 20.118a7.5 7.5 0 0 1 14.998 0A17.933 17.933 0 0 1 12 21.75c-2.676 0-5.216-.584-7.499-1.632Z" />
-                                                </svg>
-                                                {{ app.professional?.name || 'Profissional não atribuído' }}
-                                            </div>
-                                            <p v-if="app.notes" class="text-xs text-gray-500 italic mt-0.5">Obs: {{ app.notes }}</p>
-                                        </div>
-                                    </div>
-
-                                    <div class="flex items-center gap-3 mt-3 sm:mt-0">
-                                        <span :class="[statusMeta(app.status).class, 'text-xs font-bold px-2.5 py-1 rounded-full border']">
-                                            {{ statusMeta(app.status).label }}
-                                        </span>
-
-                                        <select :value="app.status" @change="handleStatusChange(app.id, $event.target.value)" class="text-xs border-gray-300 rounded p-1 focus:ring-indigo-500 bg-white shadow-sm">
-                                            <option value="agendado">Agendado</option>
-                                            <option value="confirmado">Confirmado</option>
-                                            <option value="espera">Em Espera</option>
-                                            <option value="atendimento">Em Atendimento</option>
-                                            <option value="finalizado">Finalizado</option>
-                                            <option value="falta">Falta</option>
-                                            <option value="cancelado">Cancelado</option>
-                                        </select>
-
-                                        <Link v-if="app.patient_id" :href="route('patients.show', app.patient_id)" class="text-xs bg-white border border-gray-300 hover:bg-gray-100 font-semibold px-2.5 py-1.5 rounded transition shadow-sm">
-                                            Prontuário
-                                        </Link>
-
-                                        <button @click="deleteAppointment(app.id)" class="text-gray-300 hover:text-red-600 px-1 font-bold text-sm transition-colors" title="Remover Registro">✕</button>
-                                    </div>
-
-                                </div>
-                            </div>
-
-                            <div v-else class="py-16 text-center text-gray-400 italic text-sm">
-                                <svg class="mx-auto h-12 w-12 text-gray-300 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 002-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                                </svg>
-                                Não existem consultas marcadas para o dia selecionado.
-                            </div>
-                        </div>
-
+                    <div class="flex flex-wrap items-center gap-3 w-full sm:w-auto">
+                        <button @click="openBlockModal" class="flex-1 sm:flex-none bg-red-50 hover:bg-red-100 text-red-700 px-4 py-2.5 rounded-lg font-bold text-sm transition-colors border border-red-200 flex justify-center items-center gap-2">
+                            🚫 Bloquear Horário
+                        </button>
+                        <button @click="openCreateModal" class="flex-1 sm:flex-none bg-indigo-600 hover:bg-indigo-700 text-white px-5 py-2.5 rounded-lg font-bold text-sm shadow-sm transition-all flex justify-center items-center gap-2">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" /></svg>
+                            Nova Consulta
+                        </button>
                     </div>
                 </div>
+
+                <div class="p-4 border-b border-gray-100 bg-gray-50 flex flex-col md:flex-row justify-between items-center gap-4">
+                    <div class="flex space-x-2 bg-white p-1 rounded-xl border border-gray-200 shadow-sm w-full md:w-auto">
+                        <button @click="activeTab = 'calendar'" :class="activeTab === 'calendar' ? 'bg-indigo-50 text-indigo-700 font-bold' : 'text-gray-500 hover:text-gray-700'" class="px-4 py-2 rounded-lg text-sm transition-colors flex-1">
+                            📅 Calendário
+                        </button>
+                        <button @click="activeTab = 'appointments'" :class="activeTab === 'appointments' ? 'bg-indigo-50 text-indigo-700 font-bold' : 'text-gray-500 hover:text-gray-700'" class="px-4 py-2 rounded-lg text-sm transition-colors flex-1">
+                            📄 Lista de Consultas
+                        </button>
+                        <button @click="activeTab = 'blocks'" :class="activeTab === 'blocks' ? 'bg-red-50 text-red-700 font-bold' : 'text-gray-500 hover:text-gray-700'" class="px-4 py-2 rounded-lg text-sm transition-colors flex-1">
+                            🚫 Indisponibilidades
+                        </button>
+                    </div>
+
+                    <div v-if="canManageOthers" class="w-full md:w-auto flex items-center gap-2">
+                        <span class="text-xs font-bold text-gray-500 uppercase whitespace-nowrap">Filtrar Agenda:</span>
+                        <select v-model="selectedFilterProfessional" @change="filterAppointments" class="border-gray-300 rounded-lg text-sm w-full md:w-56 focus:border-indigo-500 focus:ring-indigo-500">
+                            <option value="">Equipe Completa</option>
+                            <option v-for="prof in professionals" :key="prof.id" :value="prof.id">{{ prof.name }}</option>
+                        </select>
+                    </div>
+                </div>
+
+                <!-- 1. CALENDÁRIO FULLCALENDAR (USANDO v-show PARA NÃO PERDER A RENDERIZAÇÃO) -->
+                <!-- REMOVIDO min-h-[600px] PARA QUE O CALENDÁRIO GERENCIE A ALTURA -->
+                <div v-show="activeTab === 'calendar'" class="p-6 bg-white overflow-x-auto">
+                    <FullCalendar :options="calendarOptions" />
+                </div>
+
+                <!-- 2. LISTA DE CONSULTAS (TABELA) -->
+                <table v-show="activeTab === 'appointments'" class="w-full text-left border-collapse">
+                    <thead>
+                        <tr class="bg-white border-b text-xs uppercase tracking-wider text-gray-500 font-black">
+                            <th class="p-4">Data e Hora</th>
+                            <th class="p-4">Paciente</th>
+                            <th v-if="canManageOthers" class="p-4">Profissional</th>
+                            <th class="p-4">Status</th>
+                            <th class="p-4 text-right">Ações</th>
+                        </tr>
+                    </thead>
+                    <tbody class="text-sm divide-y divide-gray-100">
+                        <tr v-if="appointments.length === 0">
+                            <td :colspan="canManageOthers ? 5 : 4" class="p-8 text-center text-gray-400">Nenhum agendamento ativo localizado.</td>
+                        </tr>
+                        <tr v-for="appt in appointments" :key="appt.id" class="hover:bg-gray-50/50 transition-colors" :class="appt.status === 'cancelado' ? 'opacity-40 grayscale bg-gray-50/50' : ''">
+                            <td class="p-4">
+                                <div class="font-bold text-indigo-700" :class="appt.status === 'cancelado' ? 'line-through text-gray-400' : ''">{{ appt.formatted_start }}</div>
+                                <div class="text-[10px] uppercase font-bold text-gray-400 mt-0.5 tracking-wider">Até às {{ appt.formatted_end_time_only }}</div>
+                            </td>
+                            <td class="p-4">
+                                <div class="font-bold text-gray-900">{{ appt.patient?.name }}</div>
+                                <div class="text-xs text-gray-500">{{ appt.patient?.phone }}</div>
+                            </td>
+                            <td v-if="canManageOthers" class="p-4 text-gray-700 font-medium">{{ appt.professional?.name }}</td>
+                            <td class="p-4">
+                                <span v-if="appt.status === 'agendado'" class="px-2 py-1 text-[10px] font-black uppercase tracking-wider rounded-md bg-amber-50 text-amber-700 border border-amber-200">Agendado</span>
+                                <span v-else-if="appt.status === 'concluido'" class="px-2 py-1 text-[10px] font-black uppercase tracking-wider rounded-md bg-green-50 text-green-700 border border-green-200">Concluído</span>
+                                <span v-else class="px-2 py-1 text-[10px] font-black uppercase tracking-wider rounded-md bg-red-50 text-red-700 border border-red-200">Cancelado</span>
+                            </td>
+                            <td class="p-4 text-right space-x-2 flex items-center justify-end">
+                                <select v-if="appt.status === 'agendado'" @change="updateStatus(appt.id, $event.target.value)" class="text-xs font-bold border-gray-300 rounded-lg py-1.5 px-3 bg-white shadow-sm cursor-pointer">
+                                    <option value="agendado">Ações...</option>
+                                    <option value="concluido">Concluir Consulta</option>
+                                    <option value="cancelado">Cancelar Consulta</option>
+                                </select>
+                                <button @click="deleteAppointment(appt.id)" class="text-red-500 hover:text-red-700 font-bold text-xs bg-red-50 hover:bg-red-100 p-2 rounded-lg transition-colors">
+                                    ✕
+                                </button>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+
+                <!-- 3. LISTA DE INDISPONIBILIDADES (TABELA) -->
+                <table v-show="activeTab === 'blocks'" class="w-full text-left border-collapse bg-red-50/10">
+                    <thead>
+                        <tr class="bg-white border-b text-xs uppercase tracking-wider text-red-500 font-black">
+                            <th class="p-4">Início</th>
+                            <th class="p-4">Fim</th>
+                            <th class="p-4">Justificação</th>
+                            <th v-if="canManageOthers" class="p-4">Profissional</th>
+                            <th class="p-4 text-right">Ações</th>
+                        </tr>
+                    </thead>
+                    <tbody class="text-sm divide-y divide-gray-100">
+                        <tr v-if="scheduleBlocks.length === 0">
+                            <td :colspan="canManageOthers ? 5 : 4" class="p-8 text-center text-gray-400">Nenhum bloqueio de horário configurado.</td>
+                        </tr>
+                        <tr v-for="block in scheduleBlocks" :key="'block-'+block.id" class="hover:bg-red-50/30 transition-colors">
+                            <td class="p-4 font-bold text-gray-800">{{ block.formatted_start }}</td>
+                            <td class="p-4 font-bold text-gray-800">{{ block.formatted_end }}</td>
+                            <td class="p-4 text-red-700 font-medium">{{ block.reason }}</td>
+                            <td v-if="canManageOthers" class="p-4 text-gray-600">{{ block.professional?.name }}</td>
+                            <td class="p-4 text-right">
+                                <button @click="deleteBlock(block.id)" class="text-gray-600 hover:text-green-700 font-bold text-xs border border-gray-300 bg-white hover:bg-green-50 px-3 py-1.5 rounded-lg transition-colors">
+                                    Desbloquear
+                                </button>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
             </div>
         </div>
 
-        <Modal :show="showingCancelModal" @close="showingCancelModal = false" maxWidth="md">
+        <!-- MODAL DE NOVA MARCAÇÃO -->
+        <Modal :show="showingCreateModal" @close="showingCreateModal = false" maxWidth="md">
             <div class="p-6">
-                <h3 class="text-lg font-bold text-gray-900 mb-2 flex items-center gap-2 text-red-600">Cancelar Agendamento</h3>
-                <p class="text-sm text-gray-500 mb-4">Por favor, informe a justificativa do cancelamento.</p>
-                <textarea v-model="cancellationReason" rows="3" class="block w-full border-gray-300 focus:border-red-500 focus:ring-red-500 rounded-md shadow-sm text-sm" required></textarea>
-                <div class="mt-6 flex justify-end gap-3">
-                    <SecondaryButton @click="showingCancelModal = false">Voltar</SecondaryButton>
-                    <button @click="confirmCancellation" class="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded font-medium text-sm transition-colors shadow-sm">Confirmar Cancelamento</button>
-                </div>
+                <h3 class="text-lg font-black text-gray-900 border-b pb-3 mb-5">Nova Marcação</h3>
+                
+                <form @submit.prevent="submitAppointment" class="space-y-5">
+                    <div>
+                        <InputLabel value="Paciente *" />
+                        <select v-model="form.patient_id" class="mt-1 block w-full border-gray-300 focus:border-indigo-500 rounded-lg shadow-sm" required>
+                            <option value="" disabled>Selecione o paciente...</option>
+                            <option v-for="pat in patients" :key="pat.id" :value="pat.id">{{ pat.name }}</option>
+                        </select>
+                    </div>
+
+                    <div v-if="canManageOthers">
+                        <InputLabel value="Profissional Responsável *" />
+                        <select v-model="form.professional_id" class="mt-1 block w-full border-gray-300 focus:border-indigo-500 rounded-lg shadow-sm" required>
+                            <option value="" disabled>Selecione o profissional...</option>
+                            <option v-for="prof in professionals" :key="prof.id" :value="prof.id">{{ prof.name }}</option>
+                        </select>
+                    </div>
+
+                    <div class="grid grid-cols-2 gap-4">
+                        <div>
+                            <InputLabel value="Início *" />
+                            <TextInput type="datetime-local" class="mt-1 block w-full text-sm" v-model="form.start_time" required />
+                        </div>
+                        <div>
+                            <InputLabel value="Fim (Automático) *" />
+                            <TextInput type="datetime-local" class="mt-1 block w-full text-sm bg-gray-50" v-model="form.end_time" readonly required />
+                        </div>
+                    </div>
+
+                    <div>
+                        <InputLabel value="Notas e Observações" />
+                        <textarea v-model="form.notes" rows="2" class="mt-1 block w-full border-gray-300 focus:border-indigo-500 rounded-lg shadow-sm"></textarea>
+                    </div>
+
+                    <div class="flex items-center justify-end pt-4 border-t gap-3 mt-6">
+                        <button type="button" @click="showingCreateModal = false" class="text-sm font-bold text-gray-600 hover:text-gray-900">Cancelar</button>
+                        <PrimaryButton :disabled="form.processing" class="bg-indigo-600 hover:bg-indigo-700">Confirmar Registro</PrimaryButton>
+                    </div>
+                </form>
             </div>
         </Modal>
+
+        <!-- MODAL DE BLOQUEIO DE HORÁRIO -->
+        <Modal :show="showingBlockModal" @close="showingBlockModal = false" maxWidth="md">
+            <div class="p-0 overflow-hidden">
+                <div class="bg-gray-900 text-white p-5 flex justify-between items-center">
+                    <h3 class="font-black text-lg flex items-center gap-2">🚫 Definir Indisponibilidade</h3>
+                </div>
+                <form @submit.prevent="submitBlock" class="p-6 space-y-5 bg-white">
+                    <div v-if="canManageOthers">
+                        <InputLabel value="Profissional *" />
+                        <select v-model="blockForm.professional_id" class="mt-1 block w-full border-gray-300 rounded-lg shadow-sm" required>
+                            <option value="" disabled>Selecione o membro...</option>
+                            <option v-for="prof in professionals" :key="prof.id" :value="prof.id">{{ prof.name }}</option>
+                        </select>
+                    </div>
+
+                    <div class="grid grid-cols-2 gap-4">
+                        <div>
+                            <InputLabel value="Início *" />
+                            <TextInput type="datetime-local" v-model="blockForm.start_time" class="mt-1 block w-full text-sm" required />
+                        </div>
+                        <div>
+                            <InputLabel value="Fim *" />
+                            <TextInput type="datetime-local" v-model="blockForm.end_time" class="mt-1 block w-full text-sm" required />
+                        </div>
+                    </div>
+                    
+                    <div>
+                        <InputLabel value="Motivo / Justificação *" />
+                        <TextInput type="text" v-model="blockForm.reason" class="mt-1 block w-full" placeholder="Ex: Almoço, Curso..." required />
+                    </div>
+
+                    <div class="flex items-center justify-end pt-4 gap-3 mt-4 border-t border-gray-100">
+                        <button type="button" @click="showingBlockModal = false" class="text-sm font-bold text-gray-600 hover:text-gray-900">Cancelar</button>
+                        <PrimaryButton :disabled="blockForm.processing" class="bg-red-600 hover:bg-red-700 border-none">Aplicar Bloqueio</PrimaryButton>
+                    </div>
+                </form>
+            </div>
+        </Modal>
+
     </AuthenticatedLayout>
 </template>

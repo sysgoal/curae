@@ -12,114 +12,109 @@ use App\Http\Controllers\FeedbackController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\PatientFileController;
-use App\Http\Controllers\AIController;
 use App\Http\Controllers\AiAssistantController;
 use App\Http\Controllers\PublicAnamnesisController;
+use App\Http\Controllers\AiController;
+use App\Http\Controllers\ExamRequestController;
 
-/*
-|--------------------------------------------------------------------------
-| Web Routes
-|--------------------------------------------------------------------------
-|
-| Aqui é onde você registra as rotas web da sua aplicação.
-|
-*/
-
-// Rota inicial (Redireciona direto para o login, pois é um sistema restrito)
+// Rota inicial redireciona para o login
 Route::get('/', function () {
     return redirect()->route('login');
 });
 
-// Substitua a rota '/dashboard' antiga por esta:
-Route::get('/dashboard', [DashboardController::class, 'index'])
-    ->middleware(['auth', 'verified'])
-    ->name('dashboard');
-
 // -------------------------------------------------------------
-// ÁREA PÚBLICA DO PACIENTE (Acesso via Links Seguros)
+// ÁREA PÚBLICA (Links Seguros para Pacientes)
 // -------------------------------------------------------------
-// O middleware 'signed' garante que a URL não foi adulterada
 Route::middleware('signed')->group(function () {
-
-    // Receita Digital Segura
-    Route::get('/receita/{prescription}', [PrescriptionController::class, 'showPublic'])
-        ->name('prescriptions.show.public');
-
-    // Formulário de Avaliação Pós-Consulta
-    Route::get('/avaliacao/{feedback}', [FeedbackController::class, 'editPublic'])
-        ->name('feedbacks.edit.public');
-
-    Route::put('/avaliacao/{feedback}', [FeedbackController::class, 'updatePublic'])
-        ->name('feedbacks.update.public');
-
-    // Gráficos de Evolução do Paciente
-    Route::get('/meus-graficos/{patient}', [EvolutionController::class, 'showPublicCharts'])
-        ->name('evolutions.charts.public');
+    Route::get('/receita/{prescription}', [PrescriptionController::class, 'showPublic'])->name('prescriptions.show.public');
+    Route::get('/avaliacao/{feedback}', [FeedbackController::class, 'editPublic'])->name('feedbacks.edit.public');
+    Route::put('/avaliacao/{feedback}', [FeedbackController::class, 'updatePublic'])->name('feedbacks.update.public');
+    Route::get('/meus-graficos/{patient}', [EvolutionController::class, 'showPublicCharts'])->name('evolutions.charts.public');
+    Route::get('/ficha-clinica/{patient}/{professional}', [PublicAnamnesisController::class, 'create'])->name('public.anamnesis.create');
+    Route::post('/ficha-clinica/{patient}/{professional}', [PublicAnamnesisController::class, 'store'])->name('public.anamnesis.store');
 });
 
 // -------------------------------------------------------------
-// PAINEL DO SISTEMA (Requer Login)
+// PAINEL INTERNO PROTEGIDO (Requer Autenticação)
 // -------------------------------------------------------------
-// O middleware 'auth' protege todas as rotas deste grupo
-Route::middleware(['auth', 'verified'])->prefix('painel')->group(function () {
+Route::middleware(['auth', 'verified'])->group(function () {
 
-
-
-    // 1. Coloque ESTA linha DENTRO do seu middleware 'auth' (junto das outras rotas)
-    Route::post('/patients/{patient}/anamnesis-link', [PublicAnamnesisController::class, 'generateLink'])->name('patients.anamnesis.link');
-
-
-    // Dashboard Inicial (Agora renderizado via Vue.js/Inertia)
-    Route::get('/', function () {
-        return Inertia::render('Dashboard');
-    })->name('dashboard');
-
-    // Cadastros Principais (Gera rotas para index, create, store, show, edit, update, destroy)
-    Route::resource('patients', PatientController::class);
-    Route::resource('professionals', ProfessionalController::class);
-    Route::resource('appointments', AppointmentController::class);
-
-    // Prontuário, Evolução e Prescrições
-    // Omitimos o método 'index' porque essas listas geralmente aparecem dentro da tela de detalhes do paciente
-    Route::resource('anamneses', AnamnesisController::class)->except(['index']);
-    Route::resource('evolutions', EvolutionController::class)->except(['index']);
-    Route::resource('prescriptions', PrescriptionController::class)->except(['index']);
-
-    // Feedbacks recebidos (Apenas visualização no painel)
-    Route::get('feedbacks', [FeedbackController::class, 'index'])->name('feedbacks.index');
-    Route::get('feedbacks/{feedback}', [FeedbackController::class, 'show'])->name('feedbacks.show');
-});
-// Rotas de Perfil do Usuário (Breeze)
-Route::middleware('auth')->group(function () {
+    // Comum a todos os utilizadores autenticados
+    Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard');
     Route::get('/profile', [ProfileController::class, 'edit'])->name('profile.edit');
     Route::patch('/profile', [ProfileController::class, 'update'])->name('profile.update');
     Route::delete('/profile', [ProfileController::class, 'destroy'])->name('profile.destroy');
 
-    Route::get('/prescriptions/{prescription}/pdf', [App\Http\Controllers\PrescriptionController::class, 'generatePdf'])->name('prescriptions.pdf');
-    // Coloque esta linha PRIMEIRO
-    Route::patch('/appointments/{id}/status', [App\Http\Controllers\AppointmentController::class, 'updateStatus'])->name('appointments.updateStatus');
+    // ---------------------------------------------------------
+    // PERFIL EXCLUSIVO: ADMINISTRADOR GERAL
+    // ---------------------------------------------------------
+    Route::middleware(['role:admin'])->group(function () {
+        Route::resource('professionals', ProfessionalController::class);
+    });
 
-    // E o resource DEPOIS
-    Route::resource('appointments', App\Http\Controllers\AppointmentController::class);
+    // ---------------------------------------------------------
+    // ACESSO ADMINISTRATIVO COMPARTILHADO (Admin + Secretaria)
+    // ---------------------------------------------------------
+    Route::middleware(['role:admin|secretaria'])->group(function () {
+        Route::get('/appointments/calendar', [AppointmentController::class, 'calendar'])->name('appointments.calendar');
+    });
 
+    // ---------------------------------------------------------
+    // ACESSO COLETIVO DE CADASTRO (Secretaria + Equipa Clínica)
+    // ---------------------------------------------------------
+    Route::middleware(['role:admin|secretaria|medico|enfermeira|nutricionista|fisioterapeuta'])->group(function () {
+        Route::resource('patients', PatientController::class);
+        Route::resource('appointments', AppointmentController::class);
+        Route::patch('/appointments/{id}/status', [AppointmentController::class, 'updateStatus'])->name('appointments.updateStatus');
+        Route::get('feedbacks', [FeedbackController::class, 'index'])->name('feedbacks.index');
+        Route::post('/patients/{patient}/anamnesis-link', [PublicAnamnesisController::class, 'generateLink'])->name('patients.anamnesis.link');
+        Route::post('/schedule-blocks', [AppointmentController::class, 'storeBlock'])->name('schedule-blocks.store');
+        Route::delete('/schedule-blocks/{id}', [AppointmentController::class, 'destroyBlock'])->name('schedule-blocks.destroy');
+       
+        });
+// Rotas de Inteligência Artificial Clínica
+    Route::middleware(['auth', 'role:admin|medico'])->group(function () {
+    // Rota de IA protegida para médicos e equipe clínica
+        Route::post('/ai/analyze', [AiController::class, 'analyze'])->name('ai.analyze');
+        
+    });
 
-    Route::post('/patient-files', [PatientFileController::class, 'store'])->name('patient-files.store');
-    Route::delete('/patient-files/{patientFile}', [PatientFileController::class, 'destroy'])->name('patient-files.destroy');
+    // ---------------------------------------------------------
+    // ACESSO CLÍNICO EXPANSIVO (Corpo Técnico de Saúde)
+    // ---------------------------------------------------------
+    Route::middleware(['role:admin|medico|enfermeira|nutricionista|fisioterapeuta'])->group(function () {
+        Route::resource('anamneses', AnamnesisController::class)->except(['index']);
+        Route::resource('evolutions', EvolutionController::class)->except(['index']);
+        Route::post('/patient-files', [PatientFileController::class, 'store'])->name('patient-files.store');
+        Route::delete('/patient-files/{patientFile}', [PatientFileController::class, 'destroy'])->name('patient-files.destroy');
+    });
 
+    // ---------------------------------------------------------
+    // ACESSO CLÍNICO EXPANSIVO (Corpo Técnico de Saúde)
+    // ---------------------------------------------------------
+    Route::middleware(['role:admin|medico|enfermeira|nutricionista|fisioterapeuta'])->group(function () {
+        
+        // ADICIONE ESTA LINHA AQUI:
+        Route::get('/patients/{patient}/history', [PatientController::class, 'history'])->name('patients.history');
+        
+        Route::resource('anamneses', AnamnesisController::class)->except(['index']);
+        Route::resource('evolutions', EvolutionController::class)->except(['index']);
+        // Pedidos de Exames
+        Route::get('/exam-requests/create', [ExamRequestController::class, 'create'])->name('exam-requests.create');
+        Route::post('/exam-requests', [ExamRequestController::class, 'store'])->name('exam-requests.store');
+        Route::get('/exam-requests/{examRequest}/pdf', [ExamRequestController::class, 'pdf'])->name('exam-requests.pdf');
+        // ...
+    });
 
-    Route::post('/ask-ai', [AIController::class, 'ask']);
-
-    Route::post('/ai/analyze', [AiAssistantController::class, 'analyzeText'])->name('ai.analyze');
-    Route::post('/ai/protocol', [AiAssistantController::class, 'generateProtocol'])->name('ai.protocol');
-    Route::get('/ai/protocol/download', [AiAssistantController::class, 'downloadProtocolPdf'])->name('ai.protocol.download');
+    // ---------------------------------------------------------
+    // ACESSO CLÍNICO PRIVILEGIADO (Apenas Médicos)
+    // ---------------------------------------------------------
+    Route::middleware(['role:admin|medico'])->group(function () {
+        Route::resource('prescriptions', PrescriptionController::class)->except(['index']);
+        Route::get('/prescriptions/{prescription}/pdf', [PrescriptionController::class, 'generatePdf'])->name('prescriptions.pdf');
+        Route::post('/ai/analyze', [AiController::class, 'analyze'])->name('ai.analyze');
+        
+    });
 });
 
-// 2. Coloque ESTAS DUAS linhas FORA do middleware 'auth' (podem ir para o final do ficheiro)
-Route::get('/ficha-clinica/{patient}/{professional}', [PublicAnamnesisController::class, 'create'])->name('public.anamnesis.create')->middleware('signed');
-Route::post('/ficha-clinica/{patient}/{professional}', [PublicAnamnesisController::class, 'store'])->name('public.anamnesis.store')->middleware('signed');
-
-// -------------------------------------------------------------
-// AUTENTICAÇÃO (Breeze)
-// -------------------------------------------------------------
-// Carrega as rotas de Login, Registro, Logout e Recuperação de Senha do Vue
 require __DIR__ . '/auth.php';

@@ -10,12 +10,19 @@ use Inertia\Inertia;
 
 class AnamnesisController extends Controller
 {
-    public function create(Request $request)
+   public function create(Request $request)
     {
         $patient = Patient::findOrFail($request->patient_id);
         
+        // Busca todas as anamneses anteriores deste paciente, ordenadas da mais recente para a mais antiga
+        $historicalData = Anamnesis::where('patient_id', $patient->id)
+            ->with('professional') // Traz o nome de quem preencheu
+            ->orderBy('created_at', 'desc')
+            ->get();
+
         return Inertia::render('Anamneses/Create', [
-            'patient' => $patient
+            'patient' => $patient,
+            'historicalData' => $historicalData
         ]);
     }
 

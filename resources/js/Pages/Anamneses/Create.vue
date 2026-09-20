@@ -2,9 +2,15 @@
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
 import { Head, useForm, Link } from '@inertiajs/vue3';
 import PrimaryButton from '@/Components/PrimaryButton.vue';
-import { ref } from 'vue';
+import { ref, computed } from 'vue';
 
-const props = defineProps({ patient: Object });
+const props = defineProps({ 
+    patient: Object,
+    historicalData: {
+        type: Array,
+        default: () => [] // Garante que não há erro se o histórico vier vazio
+    }
+});
 
 // 1. Cálculo rigoroso da idade
 const getAge = (dob) => {
@@ -51,6 +57,42 @@ const toggleSymptom = (symptom) => {
     else form.symptoms_checklist.splice(index, 1);
 };
 
+// ==========================================
+// 🧠 LÓGICA DO HISTÓRICO CONTEXTUAL
+// ==========================================
+const activeFieldKey = ref('');
+const activeFieldLabel = ref('Selecione um campo');
+const isPanelExpanded = ref(true);
+
+const setFocusField = (key, label) => {
+    activeFieldKey.value = key;
+    activeFieldLabel.value = label;
+    isPanelExpanded.value = true;
+};
+
+const currentFieldHistory = computed(() => {
+    if (!activeFieldKey.value || !props.historicalData || props.historicalData.length === 0) return [];
+
+    return props.historicalData.map(record => {
+        let value = record[activeFieldKey.value];
+        
+        if (!value && record.adult_data && record.adult_data[activeFieldKey.value] !== undefined) {
+            value = record.adult_data[activeFieldKey.value];
+        }
+        
+        if (!value && record.child_data && record.child_data[activeFieldKey.value] !== undefined) {
+            value = record.child_data[activeFieldKey.value];
+        }
+
+        return {
+            id: record.id,
+            date: new Date(record.created_at).toLocaleDateString('pt-BR', { day: '2-digit', month: 'short', year: 'numeric' }),
+            professional: record.professional ? record.professional.name : 'Clínica',
+            value: value || ''
+        };
+    }).filter(item => item.value && item.value.toString().trim() !== '');
+});
+
 const submit = () => {
     if (form.type === 'adult') form.child_data = null;
     else { form.patient_routine = null; form.adult_data = null; }
@@ -68,13 +110,14 @@ const submit = () => {
                     <span v-if="form.type === 'child'" class="text-[10px] bg-pink-100 text-pink-700 px-2.5 py-1 rounded-full font-black uppercase tracking-widest shadow-sm border border-pink-200">Ficha Pediátrica PCA</span>
                     <span v-else class="text-[10px] bg-indigo-100 text-indigo-700 px-2.5 py-1 rounded-full font-black uppercase tracking-widest shadow-sm border border-indigo-200">Ficha Adulto Integrativa</span>
                 </h2>
-                </div>
+                <Link :href="route('patients.show', patient.id)" class="text-gray-600 hover:underline text-sm font-medium">&larr; Voltar ao Prontuário</Link>
+            </div>
         </template>
 
-        <div class="py-8 max-w-7xl mx-auto sm:px-6 lg:px-8 flex flex-col md:flex-row gap-6">
+        <div class="py-8 max-w-7xl mx-auto sm:px-6 lg:px-8 flex flex-col md:flex-row gap-6 relative">
             
             <div class="w-full md:w-1/4">
-                <div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-4 sticky top-6">
+                <div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-4 sticky top-6 z-10">
                     <h3 class="text-xs font-black text-gray-400 uppercase tracking-wider mb-4 px-2">Navegação da Ficha</h3>
                     <nav class="space-y-1">
                         <template v-if="form.type === 'adult'">
@@ -93,21 +136,45 @@ const submit = () => {
                 </div>
             </div>
 
-            <div class="w-full md:w-3/4">
+            <div class="w-full md:w-3/4 pb-20">
                 <form @submit.prevent="submit" class="bg-white p-8 rounded-2xl shadow-sm border border-gray-100">
                     
                     <div v-if="form.type === 'adult'">
                         <div v-if="currentStep === 0" class="space-y-5 animate-fade-in">
                             <h2 class="text-2xl font-black text-gray-800 mb-6">📋 Dados e Histórico Geral</h2>
-                            <div><label class="block text-sm font-bold text-gray-700 mb-1">Queixa Principal / Motivo da Consulta</label><textarea v-model="form.chief_complaint" rows="3" class="w-full border-gray-300 rounded-xl focus:ring-indigo-500 bg-gray-50"></textarea></div>
+                            <div>
+                                <label class="block text-sm font-bold text-gray-700 mb-1">Queixa Principal / Motivo da Consulta</label>
+                                <textarea v-model="form.chief_complaint" @focus="setFocusField('chief_complaint', 'Queixa Principal')" rows="3" class="w-full border-gray-300 rounded-xl focus:ring-indigo-500 bg-gray-50 transition-colors"></textarea>
+                            </div>
                             <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
-                                <div><label class="block text-sm font-bold text-gray-700 mb-1">Rotina de Trabalho / Exercícios</label><textarea v-model="form.patient_routine" rows="2" class="w-full border-gray-300 rounded-xl focus:ring-indigo-500 bg-gray-50"></textarea></div>
-                                <div><label class="block text-sm font-bold text-gray-700 mb-1">Rotina Alimentar</label><textarea v-model="form.adult_data.diet_routine" rows="2" class="w-full border-gray-300 rounded-xl focus:ring-indigo-500 bg-gray-50"></textarea></div>
-                                <div><label class="block text-sm font-bold text-gray-700 mb-1">Dorme a que horas? (Celular no quarto?)</label><input type="text" v-model="form.adult_data.sleep_routine" class="w-full border-gray-300 rounded-xl focus:ring-indigo-500 bg-gray-50"></div>
-                                <div><label class="block text-sm font-bold text-gray-700 mb-1">Costuma tomar Sol?</label><input type="text" v-model="form.adult_data.sun_exposure" class="w-full border-gray-300 rounded-xl focus:ring-indigo-500 bg-gray-50"></div>
-                                <div class="md:col-span-2"><label class="block text-sm font-bold text-gray-700 mb-1">Remédios Diários / Anticoncepcional / Diurético</label><textarea v-model="form.adult_data.medications" rows="2" class="w-full border-gray-300 rounded-xl focus:ring-indigo-500 bg-gray-50"></textarea></div>
-                                <div><label class="block text-sm font-bold text-gray-700 mb-1">Histórico Familiar de Doenças</label><textarea v-model="form.family_history" rows="2" class="w-full border-gray-300 rounded-xl focus:ring-indigo-500 bg-gray-50"></textarea></div>
-                                <div><label class="block text-sm font-bold text-gray-700 mb-1">Traumas ou Parto (Cesárea/Normal)</label><input type="text" v-model="form.adult_data.birth_type" class="w-full border-gray-300 rounded-xl focus:ring-indigo-500 bg-gray-50" placeholder="Ex: Parto Cesárea. Trauma na infância..."></div>
+                                <div>
+                                    <label class="block text-sm font-bold text-gray-700 mb-1">Rotina de Trabalho / Exercícios</label>
+                                    <textarea v-model="form.patient_routine" @focus="setFocusField('patient_routine', 'Rotina de Trabalho')" rows="2" class="w-full border-gray-300 rounded-xl focus:ring-indigo-500 bg-gray-50 transition-colors"></textarea>
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-bold text-gray-700 mb-1">Rotina Alimentar</label>
+                                    <textarea v-model="form.adult_data.diet_routine" @focus="setFocusField('diet_routine', 'Rotina Alimentar')" rows="2" class="w-full border-gray-300 rounded-xl focus:ring-indigo-500 bg-gray-50 transition-colors"></textarea>
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-bold text-gray-700 mb-1">Dorme a que horas? (Celular no quarto?)</label>
+                                    <input type="text" v-model="form.adult_data.sleep_routine" @focus="setFocusField('sleep_routine', 'Padrão de Sono')" class="w-full border-gray-300 rounded-xl focus:ring-indigo-500 bg-gray-50 transition-colors">
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-bold text-gray-700 mb-1">Costuma tomar Sol?</label>
+                                    <input type="text" v-model="form.adult_data.sun_exposure" @focus="setFocusField('sun_exposure', 'Exposição ao Sol')" class="w-full border-gray-300 rounded-xl focus:ring-indigo-500 bg-gray-50 transition-colors">
+                                </div>
+                                <div class="md:col-span-2">
+                                    <label class="block text-sm font-bold text-gray-700 mb-1">Remédios Diários / Anticoncepcional / Diurético</label>
+                                    <textarea v-model="form.adult_data.medications" @focus="setFocusField('medications', 'Medicações em Uso')" rows="2" class="w-full border-gray-300 rounded-xl focus:ring-indigo-500 bg-gray-50 transition-colors"></textarea>
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-bold text-gray-700 mb-1">Histórico Familiar de Doenças</label>
+                                    <textarea v-model="form.family_history" @focus="setFocusField('family_history', 'Histórico Familiar')" rows="2" class="w-full border-gray-300 rounded-xl focus:ring-indigo-500 bg-gray-50 transition-colors"></textarea>
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-bold text-gray-700 mb-1">Traumas ou Parto (Cesárea/Normal)</label>
+                                    <input type="text" v-model="form.adult_data.birth_type" @focus="setFocusField('birth_type', 'Traumas / Nascimentos')" class="w-full border-gray-300 rounded-xl focus:ring-indigo-500 bg-gray-50 transition-colors" placeholder="Ex: Parto Cesárea. Trauma na infância...">
+                                </div>
                             </div>
                         </div>
 
@@ -131,21 +198,48 @@ const submit = () => {
                         <div v-if="currentStep === 0" class="space-y-5 animate-fade-in">
                             <h2 class="text-2xl font-black text-gray-800 mb-6">🧸 Dados e Queixas Principais</h2>
                             <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
-                                <div><label class="block text-sm font-bold text-gray-700 mb-1">Nomes dos Pais / Responsáveis</label><input type="text" v-model="form.child_data.parents_names" class="w-full border-gray-300 rounded-xl bg-gray-50"></div>
-                                <div><label class="block text-sm font-bold text-gray-700 mb-1">Peso Atual (kg)</label><input type="text" v-model="form.child_data.weight" class="w-full border-gray-300 rounded-xl bg-gray-50"></div>
-                                <div class="md:col-span-2"><label class="block text-sm font-bold text-gray-700 mb-1">Queixa Principal</label><textarea v-model="form.chief_complaint" rows="3" class="w-full border-gray-300 rounded-xl bg-gray-50"></textarea></div>
-                                <div class="md:col-span-2"><label class="block text-sm font-bold text-gray-700 mb-1">Há algum diagnóstico prévio?</label><textarea v-model="form.child_data.previous_diagnosis" rows="2" class="w-full border-gray-300 rounded-xl bg-gray-50"></textarea></div>
+                                <div>
+                                    <label class="block text-sm font-bold text-gray-700 mb-1">Nomes dos Pais / Responsáveis</label>
+                                    <input type="text" v-model="form.child_data.parents_names" @focus="setFocusField('parents_names', 'Nomes dos Pais')" class="w-full border-gray-300 rounded-xl bg-gray-50 transition-colors">
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-bold text-gray-700 mb-1">Peso Atual (kg)</label>
+                                    <input type="text" v-model="form.child_data.weight" @focus="setFocusField('weight', 'Peso Atual')" class="w-full border-gray-300 rounded-xl bg-gray-50 transition-colors">
+                                </div>
+                                <div class="md:col-span-2">
+                                    <label class="block text-sm font-bold text-gray-700 mb-1">Queixa Principal</label>
+                                    <textarea v-model="form.chief_complaint" @focus="setFocusField('chief_complaint', 'Queixa Principal')" rows="3" class="w-full border-gray-300 rounded-xl bg-gray-50 transition-colors"></textarea>
+                                </div>
+                                <div class="md:col-span-2">
+                                    <label class="block text-sm font-bold text-gray-700 mb-1">Há algum diagnóstico prévio?</label>
+                                    <textarea v-model="form.child_data.previous_diagnosis" @focus="setFocusField('previous_diagnosis', 'Diagnóstico Prévio')" rows="2" class="w-full border-gray-300 rounded-xl bg-gray-50 transition-colors"></textarea>
+                                </div>
                             </div>
                         </div>
                         <div v-if="currentStep === 1" class="space-y-5 animate-fade-in">
                             <h2 class="text-2xl font-black text-gray-800 mb-6">🍼 Rotina, Dieta e Histórico</h2>
-                            <div><label class="block text-sm font-bold text-gray-700 mb-1">O que a criança come e bebe?</label><textarea v-model="form.child_data.diet_description" rows="3" class="w-full border-gray-300 rounded-xl bg-gray-50"></textarea></div>
-                            <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
-                                <div><label class="block text-sm font-bold text-gray-700 mb-1">Consumo Água (ml)</label><input type="text" v-model="form.child_data.water_intake" class="w-full border-gray-300 rounded-xl bg-gray-50"></div>
-                                <div><label class="block text-sm font-bold text-gray-700 mb-1">Alergias?</label><input type="text" v-model="form.child_data.allergies" class="w-full border-gray-300 rounded-xl bg-gray-50"></div>
+                            <div>
+                                <label class="block text-sm font-bold text-gray-700 mb-1">O que a criança come e bebe?</label>
+                                <textarea v-model="form.child_data.diet_description" @focus="setFocusField('diet_description', 'Alimentação Infantil')" rows="3" class="w-full border-gray-300 rounded-xl bg-gray-50 transition-colors"></textarea>
                             </div>
-                            <div><label class="block text-sm font-bold text-gray-700 mb-1">Suplemento / Medicação?</label><textarea v-model="form.child_data.supplements" rows="2" class="w-full border-gray-300 rounded-xl bg-gray-50"></textarea></div>
-                            <div><label class="block text-sm font-bold text-gray-700 mb-1">Queixa-se de alguma dor?</label><textarea v-model="form.child_data.pain_complaint" rows="2" class="w-full border-gray-300 rounded-xl bg-gray-50"></textarea></div>
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
+                                <div>
+                                    <label class="block text-sm font-bold text-gray-700 mb-1">Consumo Água (ml)</label>
+                                    <input type="text" v-model="form.child_data.water_intake" @focus="setFocusField('water_intake', 'Consumo de Água')" class="w-full border-gray-300 rounded-xl bg-gray-50 transition-colors">
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-bold text-gray-700 mb-1">Alergias?</label>
+                                    <input type="text" v-model="form.child_data.allergies" @focus="setFocusField('allergies', 'Alergias')" class="w-full border-gray-300 rounded-xl bg-gray-50 transition-colors">
+                                </div>
+                            </div>
+                            <div>
+                                <label class="block text-sm font-bold text-gray-700 mb-1">Suplemento / Medicação?</label>
+                                <textarea v-model="form.child_data.supplements" @focus="setFocusField('supplements', 'Suplementação Infantil')" rows="2" class="w-full border-gray-300 rounded-xl bg-gray-50 transition-colors"></textarea>
+                            </div>
+                            <div>
+                                <label class="block text-sm font-bold text-gray-700 mb-1">Queixa-se de alguma dor?</label>
+                                <textarea v-model="form.child_data.pain_complaint" @focus="setFocusField('pain_complaint', 'Queixa de Dor')" rows="2" class="w-full border-gray-300 rounded-xl bg-gray-50 transition-colors"></textarea>
+                            </div>
                         </div>
                         <div v-if="currentStep === 2" class="animate-fade-in">
                             <h2 class="text-2xl font-black text-pink-700 mb-2">🧩 Sinais e Comportamentos (PCA)</h2>
@@ -168,6 +262,48 @@ const submit = () => {
                     </div>
                 </form>
             </div>
+            
+            <div class="fixed bottom-6 right-6 z-50 flex flex-col items-end pointer-events-none">
+                
+                <div 
+                    v-show="isPanelExpanded && activeFieldKey"
+                    class="w-80 md:w-96 bg-white rounded-2xl shadow-2xl border border-indigo-100 mb-4 overflow-hidden pointer-events-auto transition-all duration-300 ease-in-out transform origin-bottom-right"
+                >
+                    <div class="bg-indigo-900 text-white p-3 flex justify-between items-center cursor-pointer" @click="isPanelExpanded = false">
+                        <h4 class="font-bold text-sm flex items-center gap-2">
+                            <span class="text-indigo-300">⏱️ Histórico:</span> {{ activeFieldLabel }}
+                        </h4>
+                        <button class="text-indigo-300 hover:text-white font-black text-lg">&times;</button>
+                    </div>
+                    
+                    <div class="p-0 max-h-72 overflow-y-auto bg-gray-50">
+                        <div v-if="historicalData.length === 0" class="p-6 text-center text-xs text-gray-500">
+                            Primeira anamnese deste paciente. Não há dados anteriores para comparar.
+                        </div>
+                        <div v-else-if="currentFieldHistory.length === 0" class="p-6 text-center text-xs text-gray-500">
+                            Este campo nunca foi preenchido nas consultas anteriores.
+                        </div>
+                        <div v-else class="divide-y divide-gray-100">
+                            <div v-for="record in currentFieldHistory" :key="record.id" class="p-4 hover:bg-white transition-colors">
+                                <div class="flex justify-between items-start mb-1.5">
+                                    <span class="text-xs font-black text-indigo-700">{{ record.date }}</span>
+                                    <span class="text-[9px] font-bold uppercase text-gray-400 border px-1.5 rounded bg-white">{{ record.professional }}</span>
+                                </div>
+                                <p class="text-sm text-gray-700 whitespace-pre-wrap leading-relaxed">{{ record.value }}</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <button 
+                    v-if="activeFieldKey"
+                    @click="isPanelExpanded = !isPanelExpanded"
+                    class="pointer-events-auto bg-indigo-600 hover:bg-indigo-700 text-white shadow-lg rounded-full px-5 py-3 font-bold text-sm flex items-center gap-2 transition-transform transform hover:scale-105"
+                >
+                    ⏱️ {{ isPanelExpanded ? 'Ocultar Histórico' : `Ver Histórico: ${activeFieldLabel}` }}
+                </button>
+            </div>
+
         </div>
     </AuthenticatedLayout>
 </template>

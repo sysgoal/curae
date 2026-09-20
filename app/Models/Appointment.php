@@ -21,9 +21,12 @@ class Appointment extends Model
         'cancellation_reason'
     ];
 
-    protected $casts = [
-        'appointment_date' => 'date:Y-m-d', 
-    ];
+protected $casts = [
+    'start_time' => 'datetime',
+    'end_time' => 'datetime',
+    'appointment_date' => 'date',
+];
+
 
     /**
      * Retorna o paciente desta consulta.
